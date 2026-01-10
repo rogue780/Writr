@@ -14,11 +14,12 @@ class HomeScreen extends StatelessWidget {
         title: const Text('Writr'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             const Text(
               'Welcome to Writr',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -106,7 +107,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 32),
             // Currently open project info
             Consumer<ScrivenerService>(
               builder: (context, service, child) {
@@ -137,7 +138,8 @@ class HomeScreen extends StatelessWidget {
                 return const SizedBox.shrink();
               },
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
