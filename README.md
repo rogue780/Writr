@@ -24,13 +24,27 @@ A Scrivener-compatible Android application built with Flutter that allows you to
 
 ## Getting Started
 
-### Prerequisites
+### Quick Start - Download Pre-built APK
+
+Don't want to build from source? Download the latest APK directly from GitHub Actions:
+
+1. Go to the [Actions tab](../../actions/workflows/build-apk.yml)
+2. Click on the latest successful workflow run
+3. Scroll down to "Artifacts" section
+4. Download either:
+   - `writr-debug-*.apk` - Debug build with more logging
+   - `writr-release-*.apk` - Optimized release build (recommended)
+5. Extract the zip file
+6. Enable "Install from Unknown Sources" on your Android device
+7. Transfer the APK to your device and install
+
+### Prerequisites (For Building from Source)
 
 - Flutter SDK (3.0.0 or higher)
 - Android SDK (API level 21 or higher)
 - Git
 
-### Installation
+### Installation (Building from Source)
 
 1. Clone the repository:
 ```bash
@@ -127,6 +141,29 @@ Writr implements the Scrivener file format specification:
 - [ ] Search functionality
 - [ ] Import from various formats
 
+## CI/CD Pipeline
+
+This project uses GitHub Actions for continuous integration and delivery:
+
+### Automatic Builds
+Every push to `main` or `claude/**` branches triggers:
+1. Code formatting verification
+2. Static analysis with `flutter analyze`
+3. Automated test suite
+4. APK builds (both debug and release)
+5. Artifacts uploaded for 30-90 days
+
+### Manual Builds
+You can trigger a manual build anytime:
+1. Go to Actions > "Manual Build APK"
+2. Click "Run workflow"
+3. Choose build type (debug/release/both)
+4. Download from artifacts
+
+### Workflow Files
+- `.github/workflows/build-apk.yml` - Automatic CI/CD pipeline
+- `.github/workflows/manual-build.yml` - Manual build trigger
+
 ## Known Limitations
 
 1. **Authentication**: Cloud storage OAuth flows require additional setup
@@ -137,6 +174,13 @@ Writr implements the Scrivener file format specification:
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Development Workflow
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Push and create a PR
+5. GitHub Actions will automatically build and test your changes
 
 ## License
 
