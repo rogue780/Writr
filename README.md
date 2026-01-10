@@ -1,6 +1,13 @@
 # Writr
 
-A Scrivener-compatible Android application built with Flutter that allows you to read, write, and manage Scrivener projects (.scrivx/.scriv) on your Android device with cloud storage integration.
+A cross-platform Scrivener-compatible application built with Flutter that allows you to read, write, and manage Scrivener projects (.scrivx/.scriv) on Android, Windows, macOS, and Linux with native file system integration.
+
+## Supported Platforms
+
+- 📱 **Android** (ARM64, ARM32, x86_64)
+- 🪟 **Windows** (x64)
+- 🍎 **macOS** (Intel & Apple Silicon)
+- 🐧 **Linux** (x64)
 
 ## Features
 
@@ -10,13 +17,13 @@ A Scrivener-compatible Android application built with Flutter that allows you to
 - **Document Editing**: Rich text editing with word and character count
 - **Project Structure**: Maintains Scrivener's project structure including Files/Data directories
 
-### Cloud Storage Integration (via Storage Access Framework)
-- **Google Drive**: Access projects through the Google Drive app (if installed)
-- **Dropbox**: Access projects through the Dropbox app (if installed)
-- **OneDrive**: Access projects through the OneDrive app (if installed)
-- **Local Storage**: Access projects from device storage
-- **Any Cloud App**: Works with any cloud storage app that provides a document provider
-- **No API Keys Required**: Uses Android's built-in file picker - no OAuth or API setup needed!
+### File System Integration
+- **Native File Pickers**: Uses platform-native file dialogs on all platforms
+- **Cloud Storage**: Access Google Drive, Dropbox, OneDrive through installed apps (mobile)
+- **Local Storage**: Direct access to local files and folders
+- **Network Drives**: Access network-mounted drives (desktop)
+- **External Drives**: USB drives, SD cards, external HDDs
+- **No API Keys Required**: No OAuth or API setup needed!
 
 ### User Interface
 - **Binder View**: Collapsible tree view for navigating your project structure
@@ -26,25 +33,38 @@ A Scrivener-compatible Android application built with Flutter that allows you to
 
 ## Getting Started
 
-### Quick Start - Download Pre-built APK
+### Quick Start - Download Pre-built Binaries
 
-Don't want to build from source? Download the latest APK directly from GitHub Actions:
+#### 📱 Android APK
 
-1. Go to the [Actions tab](../../actions/workflows/build-apk.yml)
+1. Go to the [Android Builds](../../actions/workflows/build-apk.yml)
 2. Click on the latest successful workflow run
 3. Scroll down to "Artifacts" section
-4. Download either:
-   - `writr-debug-*.apk` - Debug build with more logging
-   - `writr-release-*.apk` - Optimized release build (recommended)
+4. Download `writr-release-*.apk` (recommended)
 5. Extract the zip file
 6. Enable "Install from Unknown Sources" on your Android device
 7. Transfer the APK to your device and install
 
+#### 🖥️ Desktop (Windows/macOS/Linux)
+
+1. Go to the [Desktop Builds](../../actions/workflows/build-desktop.yml)
+2. Click on the latest successful workflow run
+3. Scroll down to "Artifacts" section
+4. Download the appropriate build:
+   - **Windows**: `writr-windows-*.zip` - Extract and run `writr.exe`
+   - **macOS**: `writr-macos-*.zip` - Extract and move `writr.app` to Applications
+   - **Linux**: `writr-linux-*.tar.gz` - Extract and run `./writr`
+
 ### Prerequisites (For Building from Source)
 
 - Flutter SDK (3.0.0 or higher)
-- Android SDK (API level 21 or higher)
 - Git
+
+**Platform-specific requirements:**
+- **Android**: Android SDK (API level 21 or higher)
+- **Windows**: Visual Studio 2022 with C++ desktop development
+- **macOS**: Xcode 13 or higher
+- **Linux**: GTK 3.0 development libraries
 
 ### Installation (Building from Source)
 
@@ -59,17 +79,47 @@ cd Writr
 flutter pub get
 ```
 
-### Running the App
+### Running and Building
 
-**Note**: No cloud storage configuration needed! The app uses Android's Storage Access Framework, which works with any installed cloud storage apps automatically.
+**Note**: No cloud storage configuration needed! The app uses native file pickers on all platforms.
 
+#### Run in Development
 ```bash
+# Android
 flutter run
+
+# Desktop (auto-detects your OS)
+flutter run -d windows
+flutter run -d macos
+flutter run -d linux
 ```
 
-To build for release:
+#### Enable Desktop Platforms (First Time)
 ```bash
+# Run the setup script
+chmod +x setup_desktop.sh
+./setup_desktop.sh
+
+# Or manually:
+flutter config --enable-windows-desktop
+flutter config --enable-macos-desktop
+flutter config --enable-linux-desktop
+flutter create --platforms=windows,macos,linux .
+```
+
+#### Build for Release
+```bash
+# Android
 flutter build apk --release
+
+# Windows
+flutter build windows --release
+
+# macOS
+flutter build macos --release
+
+# Linux
+flutter build linux --release
 ```
 
 ## Project Structure

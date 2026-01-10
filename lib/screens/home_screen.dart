@@ -27,7 +27,7 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'A Scrivener-compatible editor for Android',
+              'A Scrivener-compatible editor',
               style: TextStyle(fontSize: 16, color: Colors.grey),
               textAlign: TextAlign.center,
             ),
@@ -56,12 +56,11 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Writr uses your device\'s file picker to access projects from:\n\n'
-                      '• Google Drive (if app installed)\n'
-                      '• Dropbox (if app installed)\n'
-                      '• OneDrive (if app installed)\n'
-                      '• Local device storage\n'
-                      '• Any other cloud storage app\n\n'
+                      'Writr uses native file pickers to access your projects from anywhere:\n\n'
+                      '• Local storage\n'
+                      '• Network drives\n'
+                      '• Cloud storage (Google Drive, Dropbox, OneDrive)\n'
+                      '• External drives\n\n'
                       'No API keys or login required!',
                       style: TextStyle(
                         fontSize: 14,

@@ -9,7 +9,7 @@ void main() {
 
       expect(find.text('Welcome to Writr'), findsOneWidget);
       expect(
-        find.text('A Scrivener-compatible editor for Android'),
+        find.text('A Scrivener-compatible editor'),
         findsOneWidget,
       );
     },
