@@ -16,7 +16,7 @@ flutter config --enable-linux-desktop
 
 # Create platform-specific files
 echo "Creating platform directories..."
-flutter create --platforms=windows,macos,linux .
+flutter create --project-name=writr --platforms=windows,macos,linux .
 
 echo ""
 echo "Desktop setup complete!"

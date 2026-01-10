@@ -33,7 +33,7 @@ jobs:
         run: flutter pub get
 
       - name: Create Windows platform files
-        run: flutter create --platforms=windows .
+        run: flutter create --project-name=writr --platforms=windows .
 
       - name: Build Windows
         run: flutter build windows --release
@@ -80,7 +80,7 @@ jobs:
         run: flutter pub get
 
       - name: Create macOS platform files
-        run: flutter create --platforms=macos .
+        run: flutter create --project-name=writr --platforms=macos .
 
       - name: Build macOS
         run: flutter build macos --release
@@ -130,7 +130,7 @@ jobs:
         run: flutter pub get
 
       - name: Create Linux platform files
-        run: flutter create --platforms=linux .
+        run: flutter create --project-name=writr --platforms=linux .
 
       - name: Build Linux
         run: flutter build linux --release
