@@ -202,6 +202,10 @@ class _DocumentEditorState extends State<DocumentEditor> {
 
   int _countWords(String text) {
     if (text.isEmpty) return 0;
-    return text.trim().split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
+    return text
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .length;
   }
 }

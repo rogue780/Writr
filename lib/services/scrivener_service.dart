@@ -216,7 +216,8 @@ class ScrivenerService extends ChangeNotifier {
     final xmlDocument = builder.buildDocument();
     final xmlString = xmlDocument.toXmlString(pretty: true, indent: '  ');
 
-    final scrivxFile = File(path.join(projectDir.path, '${project.name}.scrivx'));
+    final scrivxFile =
+        File(path.join(projectDir.path, '${project.name}.scrivx'));
     await scrivxFile.writeAsString(xmlString);
   }
 

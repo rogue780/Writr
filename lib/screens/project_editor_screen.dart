@@ -70,9 +70,14 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                 child: _selectedItem != null
                     ? DocumentEditor(
                         item: _selectedItem!,
-                        content: service.currentProject!.textContents[_selectedItem!.id] ?? '',
+                        content: service.currentProject!
+                                .textContents[_selectedItem!.id] ??
+                            '',
                         onContentChanged: (content) {
-                          service.updateTextContent(_selectedItem!.id, content);
+                          service.updateTextContent(
+                            _selectedItem!.id,
+                            content,
+                          );
                         },
                       )
                     : const Center(
