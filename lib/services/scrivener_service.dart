@@ -266,9 +266,12 @@ class ScrivenerService extends ChangeNotifier {
 
       // Create project directory structure
       await projectDir.create(recursive: true);
-      await Directory(path.join(projectPath, 'Files', 'Data')).create(recursive: true);
-      await Directory(path.join(projectPath, 'Files', 'Docs')).create(recursive: true);
-      await Directory(path.join(projectPath, 'Settings')).create(recursive: true);
+      await Directory(path.join(projectPath, 'Files', 'Data'))
+          .create(recursive: true);
+      await Directory(path.join(projectPath, 'Files', 'Docs'))
+          .create(recursive: true);
+      await Directory(path.join(projectPath, 'Settings'))
+          .create(recursive: true);
 
       // Create empty project
       _currentProject = ScrivenerProject.empty(name, projectPath);
@@ -289,7 +292,8 @@ class ScrivenerService extends ChangeNotifier {
   void updateTextContent(String itemId, String content) {
     if (_currentProject == null) return;
 
-    final updatedContents = Map<String, String>.from(_currentProject!.textContents);
+    final updatedContents =
+        Map<String, String>.from(_currentProject!.textContents);
     updatedContents[itemId] = content;
 
     _currentProject = ScrivenerProject(
