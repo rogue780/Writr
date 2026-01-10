@@ -45,7 +45,7 @@ git checkout -b feature/your-feature-name
 
 ### Code Style
 - Follow [Dart style guide](https://dart.dev/guides/language/effective-dart/style)
-- Use `flutter format .` before committing
+- Use `dart format .` before committing
 - Run `flutter analyze` to check for issues
 - Ensure all tests pass with `flutter test`
 
