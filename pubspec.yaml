@@ -16,30 +16,13 @@ dependencies:
   # State Management
   provider: ^6.1.1
 
-  # Cloud Storage
-  googleapis: ^13.0.0
-  googleapis_auth: ^1.4.1
-  google_sign_in: ^6.2.1
-
-  # Dropbox
-  http: ^1.2.0
-
-  # File handling
+  # File handling via Storage Access Framework
   path_provider: ^2.1.2
   path: ^1.8.3
   file_picker: ^6.1.1
 
   # XML parsing for Scrivener files
   xml: ^6.5.0
-
-  # Archive handling (.scriv is a package/folder)
-  archive: ^3.4.10
-
-  # Shared preferences
-  shared_preferences: ^2.2.2
-
-  # URL launcher
-  url_launcher: ^6.2.4
 
 dev_dependencies:
   flutter_test:

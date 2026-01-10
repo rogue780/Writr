@@ -10,11 +10,13 @@ A Scrivener-compatible Android application built with Flutter that allows you to
 - **Document Editing**: Rich text editing with word and character count
 - **Project Structure**: Maintains Scrivener's project structure including Files/Data directories
 
-### Cloud Storage Integration
-- **Google Drive**: Seamlessly access and save projects to Google Drive
-- **Dropbox**: Full integration with Dropbox for project storage
-- **OneDrive**: Microsoft OneDrive support for cloud-based projects
-- **Local Storage**: Store and access projects on your device
+### Cloud Storage Integration (via Storage Access Framework)
+- **Google Drive**: Access projects through the Google Drive app (if installed)
+- **Dropbox**: Access projects through the Dropbox app (if installed)
+- **OneDrive**: Access projects through the OneDrive app (if installed)
+- **Local Storage**: Access projects from device storage
+- **Any Cloud App**: Works with any cloud storage app that provides a document provider
+- **No API Keys Required**: Uses Android's built-in file picker - no OAuth or API setup needed!
 
 ### User Interface
 - **Binder View**: Collapsible tree view for navigating your project structure
@@ -57,25 +59,9 @@ cd Writr
 flutter pub get
 ```
 
-3. Configure Cloud Storage (Optional):
-
-#### Google Drive
-1. Create a project in [Google Cloud Console](https://console.cloud.google.com)
-2. Enable Google Drive API
-3. Create OAuth 2.0 credentials
-4. Add credentials to your app
-
-#### Dropbox
-1. Create an app in [Dropbox App Console](https://www.dropbox.com/developers/apps)
-2. Get your App Key
-3. Update `_appKey` in `lib/services/cloud/dropbox_provider.dart`
-
-#### OneDrive
-1. Register your app in [Microsoft Azure Portal](https://portal.azure.com)
-2. Get your Client ID
-3. Update `_clientId` in `lib/services/cloud/onedrive_provider.dart`
-
 ### Running the App
+
+**Note**: No cloud storage configuration needed! The app uses Android's Storage Access Framework, which works with any installed cloud storage apps automatically.
 
 ```bash
 flutter run
@@ -92,18 +78,12 @@ flutter build apk --release
 lib/
 ├── main.dart                          # Application entry point
 ├── models/                            # Data models
-│   ├── scrivener_project.dart        # Scrivener project structure
-│   └── cloud_storage.dart            # Cloud storage models
+│   └── scrivener_project.dart        # Scrivener project structure
 ├── services/                          # Business logic
 │   ├── scrivener_service.dart        # Scrivener file handling
-│   ├── cloud_storage_service.dart    # Cloud storage abstraction
-│   └── cloud/                        # Cloud provider implementations
-│       ├── google_drive_provider.dart
-│       ├── dropbox_provider.dart
-│       └── onedrive_provider.dart
+│   └── storage_access_service.dart   # Storage Access Framework integration
 ├── screens/                           # UI screens
 │   ├── home_screen.dart              # Main landing screen
-│   ├── cloud_browser_screen.dart     # Cloud file browser
 │   └── project_editor_screen.dart    # Project editing interface
 └── widgets/                           # Reusable widgets
     ├── binder_tree_view.dart         # Hierarchical binder view
@@ -122,12 +102,21 @@ Writr implements the Scrivener file format specification:
 - **Text Storage**: Document content stored in `Files/Data/` directory
 - **Metadata**: Project settings and document metadata preserved
 
-### Cloud Storage Flow
+### Storage Access Framework
 
-1. **Authentication**: OAuth 2.0 flow for each cloud provider
-2. **File Browsing**: List and navigate cloud storage directories
-3. **Download**: Projects downloaded to temporary storage for editing
-4. **Sync**: Modified projects uploaded back to cloud storage
+Writr uses Android's Storage Access Framework (SAF) for seamless cloud integration:
+
+1. **File Picker**: Tap "Open Project" to launch the system file picker
+2. **Choose Location**: Select from any installed storage provider (Drive, Dropbox, OneDrive, etc.)
+3. **Direct Access**: App accesses files directly through the provider
+4. **No Setup Required**: Uses existing app authentication - no API keys or OAuth needed
+5. **Automatic Sync**: Changes are saved directly to the chosen location
+
+This approach provides:
+- **Universal Compatibility**: Works with any cloud app that implements Android's document provider
+- **Better Security**: No need to store OAuth tokens or API credentials
+- **Native Experience**: Uses the familiar Android file picker interface
+- **Simplified Setup**: Zero configuration required
 
 ## Features Roadmap
 
@@ -166,10 +155,10 @@ You can trigger a manual build anytime:
 
 ## Known Limitations
 
-1. **Authentication**: Cloud storage OAuth flows require additional setup
-2. **RTF Support**: Currently treats all documents as plain text
-3. **Media Files**: Images and PDFs displayed but not editable
-4. **Compile**: Scrivener's compile feature not yet implemented
+1. **RTF Support**: Currently treats all documents as plain text
+2. **Media Files**: Images and PDFs displayed but not editable
+3. **Compile**: Scrivener's compile feature not yet implemented
+4. **Cloud App Required**: To access cloud storage, you must have the respective app installed (Google Drive, Dropbox, etc.)
 
 ## Contributing
 

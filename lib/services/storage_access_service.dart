@@ -1,0 +1,192 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
+
+/// Service for accessing files through Android Storage Access Framework (SAF)
+/// This allows users to access cloud storage (Google Drive, Dropbox, OneDrive)
+/// through their installed apps without requiring API keys or OAuth
+class StorageAccessService extends ChangeNotifier {
+  bool _isLoading = false;
+  String? _error;
+  String? _lastSelectedPath;
+
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+  String? get lastSelectedPath => _lastSelectedPath;
+
+  /// Pick a Scrivener project directory using the system file picker
+  /// This works with any storage provider that has a document provider:
+  /// - Google Drive
+  /// - Dropbox
+  /// - OneDrive
+  /// - Local storage
+  /// - Any other cloud storage app
+  Future<String?> pickScrivenerProject() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // Use directory picker to select .scriv folder
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Select Scrivener Project (.scriv folder)',
+      );
+
+      if (selectedDirectory == null) {
+        // User cancelled
+        _isLoading = false;
+        notifyListeners();
+        return null;
+      }
+
+      // Verify it's a .scriv directory
+      if (!selectedDirectory.endsWith('.scriv')) {
+        throw Exception(
+          'Please select a .scriv folder. Selected: $selectedDirectory',
+        );
+      }
+
+      _lastSelectedPath = selectedDirectory;
+      _isLoading = false;
+      notifyListeners();
+      return selectedDirectory;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  /// Pick any directory for creating a new project
+  Future<String?> pickDirectoryForNewProject() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Select folder for new project',
+      );
+
+      if (selectedDirectory == null) {
+        // User cancelled
+        _isLoading = false;
+        notifyListeners();
+        return null;
+      }
+
+      _lastSelectedPath = selectedDirectory;
+      _isLoading = false;
+      notifyListeners();
+      return selectedDirectory;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  /// Copy a project from cloud storage to local cache for better performance
+  /// This is optional but recommended for editing
+  Future<String?> copyProjectToCache(String sourcePath) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final cacheDir = await getApplicationCacheDirectory();
+      final projectName = path.basename(sourcePath);
+      final cachedPath = path.join(cacheDir.path, projectName);
+
+      // Create cache directory
+      final cachedDir = Directory(cachedPath);
+      if (await cachedDir.exists()) {
+        await cachedDir.delete(recursive: true);
+      }
+      await cachedDir.create(recursive: true);
+
+      // Copy project recursively
+      await _copyDirectory(Directory(sourcePath), cachedDir);
+
+      _isLoading = false;
+      notifyListeners();
+      return cachedPath;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  /// Sync changes back to the original location
+  Future<bool> syncProjectBack(String cachedPath, String originalPath) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // Delete original directory contents
+      final originalDir = Directory(originalPath);
+      if (await originalDir.exists()) {
+        await for (final entity in originalDir.list()) {
+          await entity.delete(recursive: true);
+        }
+      } else {
+        await originalDir.create(recursive: true);
+      }
+
+      // Copy from cache back to original
+      await _copyDirectory(Directory(cachedPath), originalDir);
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Recursively copy directory contents
+  Future<void> _copyDirectory(Directory source, Directory destination) async {
+    await for (final entity in source.list(recursive: false)) {
+      if (entity is Directory) {
+        final newDirectory = Directory(
+          path.join(destination.path, path.basename(entity.path)),
+        );
+        await newDirectory.create(recursive: true);
+        await _copyDirectory(entity, newDirectory);
+      } else if (entity is File) {
+        final newFile = File(
+          path.join(destination.path, path.basename(entity.path)),
+        );
+        await entity.copy(newFile.path);
+      }
+    }
+  }
+
+  /// Get available storage locations (shows installed cloud apps)
+  /// Note: This is handled by the Android file picker automatically
+  Future<void> showFilePicker() async {
+    // The file picker will automatically show all available
+    // document providers including:
+    // - Google Drive
+    // - Dropbox
+    // - OneDrive
+    // - Local storage
+    // - Any other installed cloud storage apps
+    await pickScrivenerProject();
+  }
+
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+}

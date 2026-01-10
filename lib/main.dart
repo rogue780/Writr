@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
 import 'services/scrivener_service.dart';
-import 'services/cloud_storage_service.dart';
+import 'services/storage_access_service.dart';
 
 void main() {
   runApp(const WritrApp());
@@ -16,7 +16,7 @@ class WritrApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ScrivenerService()),
-        ChangeNotifierProvider(create: (_) => CloudStorageService()),
+        ChangeNotifierProvider(create: (_) => StorageAccessService()),
       ],
       child: MaterialApp(
         title: 'Writr - Scrivener Editor',
