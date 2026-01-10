@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/scrivener_project.dart';
+import '../services/scrivener_service.dart';
 
 class BinderTreeView extends StatelessWidget {
   final List<BinderItem> items;
@@ -30,12 +32,50 @@ class BinderTreeView extends StatelessWidget {
                 ),
               ),
             ),
-            child: const Text(
-              'Binder',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+            child: Row(
+              children: [
+                const Text(
+                  'Binder',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.add, size: 20),
+                  tooltip: 'Add Item',
+                  onSelected: (value) {
+                    if (value == 'folder') {
+                      _showAddDialog(context, BinderItemType.folder, null);
+                    } else if (value == 'document') {
+                      _showAddDialog(context, BinderItemType.text, null);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'folder',
+                      child: Row(
+                        children: [
+                          Icon(Icons.folder, size: 18, color: Colors.blue),
+                          SizedBox(width: 8),
+                          Text('New Folder'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'document',
+                      child: Row(
+                        children: [
+                          Icon(Icons.description, size: 18, color: Colors.grey),
+                          SizedBox(width: 8),
+                          Text('New Document'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -49,6 +89,49 @@ class BinderTreeView extends StatelessWidget {
                 );
               }).toList(),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddDialog(
+    BuildContext context,
+    BinderItemType type,
+    String? parentId,
+  ) {
+    final controller = TextEditingController();
+    final typeName = type == BinderItemType.folder ? 'Folder' : 'Document';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('New $typeName'),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            labelText: 'Name',
+            hintText: type == BinderItemType.folder ? 'Chapter 1' : 'Scene 1',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (controller.text.isNotEmpty) {
+                context.read<ScrivenerService>().addBinderItem(
+                      title: controller.text,
+                      type: type,
+                      parentId: parentId,
+                    );
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Add'),
           ),
         ],
       ),
@@ -85,6 +168,7 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
       children: [
         InkWell(
           onTap: () => widget.onItemSelected(widget.item),
+          onLongPress: () => _showContextMenu(context),
           child: Container(
             padding: EdgeInsets.only(
               left: 8.0 + (widget.depth * 16.0),
@@ -149,6 +233,156 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
             );
           }),
       ],
+    );
+  }
+
+  void _showContextMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.folder, color: Colors.blue),
+              title: const Text('Add Folder'),
+              onTap: () {
+                Navigator.pop(context);
+                _showAddDialog(context, BinderItemType.folder, widget.item.id);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.description, color: Colors.grey),
+              title: const Text('Add Document'),
+              onTap: () {
+                Navigator.pop(context);
+                _showAddDialog(context, BinderItemType.text, widget.item.id);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Rename'),
+              onTap: () {
+                Navigator.pop(context);
+                _showRenameDialog(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('Delete'),
+              onTap: () {
+                Navigator.pop(context);
+                _showDeleteDialog(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddDialog(
+    BuildContext context,
+    BinderItemType type,
+    String? parentId,
+  ) {
+    final controller = TextEditingController();
+    final typeName = type == BinderItemType.folder ? 'Folder' : 'Document';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('New $typeName'),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            labelText: 'Name',
+            hintText: type == BinderItemType.folder ? 'Chapter 1' : 'Scene 1',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (controller.text.isNotEmpty) {
+                context.read<ScrivenerService>().addBinderItem(
+                      title: controller.text,
+                      type: type,
+                      parentId: parentId,
+                    );
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRenameDialog(BuildContext context) {
+    final controller = TextEditingController(text: widget.item.title);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rename'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Name',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (controller.text.isNotEmpty) {
+                context.read<ScrivenerService>().renameBinderItem(
+                      widget.item.id,
+                      controller.text,
+                    );
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete'),
+        content: Text(
+          'Are you sure you want to delete "${widget.item.title}"?${widget.item.children.isNotEmpty ? '\n\nThis will also delete all items inside it.' : ''}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              context.read<ScrivenerService>().deleteBinderItem(widget.item.id);
+              Navigator.pop(context);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
   }
 

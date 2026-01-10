@@ -307,6 +307,184 @@ class ScrivenerService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Add a new binder item (folder or document)
+  void addBinderItem({
+    required String title,
+    required BinderItemType type,
+    String? parentId,
+  }) {
+    if (_currentProject == null) return;
+
+    final newItem = BinderItem(
+      id: _generateUniqueId(),
+      title: title,
+      type: type,
+      children: [],
+    );
+
+    List<BinderItem> updatedItems;
+    if (parentId == null) {
+      // Add to root level
+      updatedItems = [..._currentProject!.binderItems, newItem];
+    } else {
+      // Add as child of parent
+      updatedItems = _addItemToParent(
+        _currentProject!.binderItems,
+        parentId,
+        newItem,
+      );
+    }
+
+    _currentProject = ScrivenerProject(
+      name: _currentProject!.name,
+      path: _currentProject!.path,
+      binderItems: updatedItems,
+      textContents: _currentProject!.textContents,
+      settings: _currentProject!.settings,
+    );
+
+    notifyListeners();
+  }
+
+  /// Rename a binder item
+  void renameBinderItem(String itemId, String newTitle) {
+    if (_currentProject == null) return;
+
+    final updatedItems = _renameItemRecursive(
+      _currentProject!.binderItems,
+      itemId,
+      newTitle,
+    );
+
+    _currentProject = ScrivenerProject(
+      name: _currentProject!.name,
+      path: _currentProject!.path,
+      binderItems: updatedItems,
+      textContents: _currentProject!.textContents,
+      settings: _currentProject!.settings,
+    );
+
+    notifyListeners();
+  }
+
+  /// Delete a binder item
+  void deleteBinderItem(String itemId) {
+    if (_currentProject == null) return;
+
+    final updatedItems = _deleteItemRecursive(
+      _currentProject!.binderItems,
+      itemId,
+    );
+
+    // Also remove text content for this item
+    final updatedContents =
+        Map<String, String>.from(_currentProject!.textContents);
+    updatedContents.remove(itemId);
+
+    _currentProject = ScrivenerProject(
+      name: _currentProject!.name,
+      path: _currentProject!.path,
+      binderItems: updatedItems,
+      textContents: updatedContents,
+      settings: _currentProject!.settings,
+    );
+
+    notifyListeners();
+  }
+
+  /// Generate a unique ID for new items
+  String _generateUniqueId() {
+    return DateTime.now().millisecondsSinceEpoch.toString();
+  }
+
+  /// Add item as child of parent (recursive)
+  List<BinderItem> _addItemToParent(
+    List<BinderItem> items,
+    String parentId,
+    BinderItem newItem,
+  ) {
+    return items.map((item) {
+      if (item.id == parentId) {
+        return BinderItem(
+          id: item.id,
+          title: item.title,
+          type: item.type,
+          children: [...item.children, newItem],
+          label: item.label,
+          status: item.status,
+          textContent: item.textContent,
+        );
+      } else if (item.children.isNotEmpty) {
+        return BinderItem(
+          id: item.id,
+          title: item.title,
+          type: item.type,
+          children: _addItemToParent(item.children, parentId, newItem),
+          label: item.label,
+          status: item.status,
+          textContent: item.textContent,
+        );
+      }
+      return item;
+    }).toList();
+  }
+
+  /// Rename item recursively
+  List<BinderItem> _renameItemRecursive(
+    List<BinderItem> items,
+    String itemId,
+    String newTitle,
+  ) {
+    return items.map((item) {
+      if (item.id == itemId) {
+        return BinderItem(
+          id: item.id,
+          title: newTitle,
+          type: item.type,
+          children: item.children,
+          label: item.label,
+          status: item.status,
+          textContent: item.textContent,
+        );
+      } else if (item.children.isNotEmpty) {
+        return BinderItem(
+          id: item.id,
+          title: item.title,
+          type: item.type,
+          children: _renameItemRecursive(item.children, itemId, newTitle),
+          label: item.label,
+          status: item.status,
+          textContent: item.textContent,
+        );
+      }
+      return item;
+    }).toList();
+  }
+
+  /// Delete item recursively
+  List<BinderItem> _deleteItemRecursive(
+    List<BinderItem> items,
+    String itemId,
+  ) {
+    return items
+        .where((item) => item.id != itemId)
+        .map((item) {
+          if (item.children.isNotEmpty) {
+            return BinderItem(
+              id: item.id,
+              title: item.title,
+              type: item.type,
+              children: _deleteItemRecursive(item.children, itemId),
+              label: item.label,
+              status: item.status,
+              textContent: item.textContent,
+            );
+          }
+          return item;
+        })
+        .toList();
+  }
+
   void clearError() {
     _error = null;
     notifyListeners();

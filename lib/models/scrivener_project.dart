@@ -14,10 +14,19 @@ class ScrivenerProject {
   });
 
   factory ScrivenerProject.empty(String name, String path) {
+    // Create initial structure with Manuscript folder
+    final manuscriptId = DateTime.now().millisecondsSinceEpoch.toString();
+    final manuscript = BinderItem(
+      id: manuscriptId,
+      title: 'Manuscript',
+      type: BinderItemType.folder,
+      children: [],
+    );
+
     return ScrivenerProject(
       name: name,
       path: path,
-      binderItems: [],
+      binderItems: [manuscript],
       textContents: {},
       settings: ProjectSettings.defaults(),
     );
