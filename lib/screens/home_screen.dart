@@ -4,6 +4,8 @@ import '../services/scrivener_service.dart';
 import '../services/storage_access_service.dart';
 import '../services/cloud_storage_service.dart';
 import '../services/recent_projects_service.dart';
+import '../services/cloud_sync_service.dart';
+import '../models/cloud_file.dart';
 import 'project_editor_screen.dart';
 import 'cloud_browser_screen.dart';
 
@@ -349,14 +351,105 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    // TODO: Handle selected cloud project - download and open it
-    // This would require implementing cloud project download logic
-    if (selectedProject != null) {
-      if (context.mounted) {
+    // Download and open selected cloud project
+    if (selectedProject != null && selectedProject is CloudFile) {
+      if (!context.mounted) return;
+
+      final syncService = context.read<CloudSyncService>();
+      final scrivenerService = context.read<ScrivenerService>();
+      final recentService = context.read<RecentProjectsService>();
+
+      // Show download progress
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Consumer<CloudSyncService>(
+                builder: (context, sync, child) {
+                  return Text(
+                    sync.syncStatus ?? 'Downloading project...',
+                    textAlign: TextAlign.center,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+
+      try {
+        // Download project from cloud
+        final localPath = await syncService.downloadProject(selectedProject);
+
+        if (!context.mounted) return;
+
+        // Close progress dialog
+        Navigator.pop(context);
+
+        if (localPath == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Failed to download project: ${syncService.error ?? "Unknown error"}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        // Load the downloaded project
+        await scrivenerService.loadProject(localPath);
+
+        if (!context.mounted) return;
+
+        if (scrivenerService.error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error loading project: ${scrivenerService.error}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        // Add to recent projects
+        await recentService.addRecentProject(
+          name: scrivenerService.currentProject!.name,
+          path: localPath,
+        );
+
+        // Navigate to editor
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const ProjectEditorScreen(),
+          ),
+        );
+
+        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-                'Cloud project loading not yet fully implemented. Working on download logic...'),
+              'Project downloaded from ${cloudService.currentProvider?.providerName}',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        if (!context.mounted) return;
+
+        // Close progress dialog if still open
+        Navigator.pop(context);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }

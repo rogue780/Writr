@@ -5,6 +5,7 @@ import 'services/scrivener_service.dart';
 import 'services/storage_access_service.dart';
 import 'services/cloud_storage_service.dart';
 import 'services/recent_projects_service.dart';
+import 'services/cloud_sync_service.dart';
 
 void main() {
   runApp(const WritrApp());
@@ -21,6 +22,12 @@ class WritrApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => StorageAccessService()),
         ChangeNotifierProvider(create: (_) => CloudStorageService()),
         ChangeNotifierProvider(create: (_) => RecentProjectsService()),
+        ChangeNotifierProxyProvider<CloudStorageService, CloudSyncService>(
+          create: (context) =>
+              CloudSyncService(context.read<CloudStorageService>()),
+          update: (context, cloudStorage, previous) =>
+              previous ?? CloudSyncService(cloudStorage),
+        ),
       ],
       child: MaterialApp(
         title: 'Writr - Scrivener Editor',
