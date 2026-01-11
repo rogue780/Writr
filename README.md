@@ -8,6 +8,7 @@ A cross-platform Scrivener-compatible application built with Flutter that allows
 - 🪟 **Windows** (x64)
 - 🍎 **macOS** (Intel & Apple Silicon)
 - 🐧 **Linux** (x64)
+- 🌐 **Web** (All browsers)
 
 ## Features
 
@@ -55,6 +56,14 @@ A cross-platform Scrivener-compatible application built with Flutter that allows
    - **macOS**: `writr-macos-*.zip` - Extract and move `writr.app` to Applications
    - **Linux**: `writr-linux-*.tar.gz` - Extract and run `./writr`
 
+#### 🌐 Web Version (Try Online)
+
+**Live Demo**: [https://rogue780.github.io/Writr/](https://rogue780.github.io/Writr/)
+
+Try Writr instantly in your browser - no download or installation required!
+
+**Note**: Web version has file system limitations. Projects are stored in browser storage. For full cloud integration, use the desktop or mobile apps.
+
 ### Prerequisites (For Building from Source)
 
 - Flutter SDK (3.0.0 or higher)
@@ -92,6 +101,9 @@ flutter run
 flutter run -d windows
 flutter run -d macos
 flutter run -d linux
+
+# Web
+flutter run -d chrome
 ```
 
 #### Enable Desktop Platforms (First Time)
@@ -120,6 +132,9 @@ flutter build macos --release
 
 # Linux
 flutter build linux --release
+
+# Web
+flutter build web --release
 ```
 
 ## Project Structure
@@ -189,8 +204,11 @@ Every push to `main` or `claude/**` branches triggers:
 1. Code formatting verification
 2. Static analysis with `flutter analyze`
 3. Automated test suite
-4. APK builds (both debug and release)
-5. Artifacts uploaded for 30-90 days
+4. Multi-platform builds:
+   - **Android**: APK (debug and release)
+   - **Desktop**: Windows, macOS, Linux
+   - **Web**: Deployed to GitHub Pages
+5. Artifacts uploaded for 90 days
 
 ### Manual Builds
 You can trigger a manual build anytime:
@@ -200,7 +218,9 @@ You can trigger a manual build anytime:
 4. Download from artifacts
 
 ### Workflow Files
-- `.github/workflows/build-apk.yml` - Automatic CI/CD pipeline
+- `.github/workflows/build-apk.yml` - Android CI/CD pipeline
+- `.github/workflows/build-desktop.yml` - Desktop builds (Windows/macOS/Linux)
+- `.github/workflows/build-web.yml` - Web build and GitHub Pages deployment
 - `.github/workflows/manual-build.yml` - Manual build trigger
 
 ## Known Limitations
@@ -208,7 +228,8 @@ You can trigger a manual build anytime:
 1. **RTF Support**: Currently treats all documents as plain text
 2. **Media Files**: Images and PDFs displayed but not editable
 3. **Compile**: Scrivener's compile feature not yet implemented
-4. **Cloud App Required**: To access cloud storage, you must have the respective app installed (Google Drive, Dropbox, etc.)
+4. **Cloud App Required** (Mobile): To access cloud storage on Android, you must have the respective app installed (Google Drive, Dropbox, etc.)
+5. **Web File System**: Web version uses browser storage with limited file system access. Desktop/mobile apps recommended for full functionality
 
 ## Contributing
 
