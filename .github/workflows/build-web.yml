@@ -73,6 +73,8 @@ jobs:
       - name: Setup Pages
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/')
         uses: actions/configure-pages@v4
+        with:
+          enablement: true
 
       - name: Upload artifact to Pages
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/')
