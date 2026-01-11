@@ -54,8 +54,16 @@ class WebStorageService extends ChangeNotifier {
 
       // Save to SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      final jsonString = json.encode(_projects);
-      await prefs.setString(_projectsKey, jsonString);
+      try {
+        final jsonString = json.encode(_projects);
+        await prefs.setString(_projectsKey, jsonString);
+      } catch (e) {
+        print('Error encoding project to JSON: $e');
+        print('Project path: ${project.path}');
+        print('Project name: ${project.name}');
+        print('Binder items count: ${project.binderItems.length}');
+        rethrow;
+      }
 
       notifyListeners();
     } catch (e) {
@@ -154,22 +162,26 @@ class WebStorageService extends ChangeNotifier {
   /// Convert BinderItem to JSON
   Map<String, dynamic> _binderItemToJson(BinderItem item) {
     return {
-      'id': item.id,
-      'title': item.title,
+      'id': item.id.toString(),
+      'title': item.title.toString(),
       'type': item.type.toString(),
       'children': item.children.map((child) => _binderItemToJson(child)).toList(),
+      if (item.label != null) 'label': item.label.toString(),
+      if (item.status != null) 'status': item.status.toString(),
     };
   }
 
   /// Convert JSON to BinderItem
   BinderItem _binderItemFromJson(Map<String, dynamic> json) {
     return BinderItem(
-      id: json['id'],
-      title: json['title'],
-      type: _parseBinderItemType(json['type']),
+      id: json['id'].toString(),
+      title: json['title'].toString(),
+      type: _parseBinderItemType(json['type'].toString()),
       children: (json['children'] as List)
           .map((child) => _binderItemFromJson(child))
           .toList(),
+      label: json['label']?.toString(),
+      status: json['status']?.toString(),
     );
   }
 
@@ -355,9 +367,11 @@ class WebStorageService extends ChangeNotifier {
 
   /// Parse a single binder item from XML recursively
   BinderItem? _parseBinderItemFromXml(XmlElement element) {
-    final id = element.getAttribute('ID') ?? '';
-    final type = element.getAttribute('Type') ?? 'Text';
-    final title = element.findElements('Title').firstOrNull?.innerText ?? 'Untitled';
+    // Explicitly convert to plain strings to avoid XML namespace references
+    final id = (element.getAttribute('ID') ?? '').toString();
+    final type = (element.getAttribute('Type') ?? 'Text').toString();
+    final titleElement = element.findElements('Title').firstOrNull;
+    final title = (titleElement?.innerText ?? 'Untitled').toString();
 
     final children = <BinderItem>[];
     final childrenElement = element.findElements('Children').firstOrNull;
