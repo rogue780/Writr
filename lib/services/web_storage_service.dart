@@ -128,7 +128,8 @@ class WebStorageService extends ChangeNotifier {
       'textContents': project.textContents,
       'settings': {
         'autoSave': project.settings.autoSave,
-        'defaultZoom': project.settings.defaultZoom,
+        'autoSaveInterval': project.settings.autoSaveInterval,
+        'defaultTextFormat': project.settings.defaultTextFormat,
       },
     };
   }
@@ -144,7 +145,8 @@ class WebStorageService extends ChangeNotifier {
       textContents: Map<String, String>.from(json['textContents']),
       settings: ProjectSettings(
         autoSave: json['settings']['autoSave'],
-        defaultZoom: json['settings']['defaultZoom'],
+        autoSaveInterval: json['settings']['autoSaveInterval'],
+        defaultTextFormat: json['settings']['defaultTextFormat'],
       ),
     );
   }
