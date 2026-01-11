@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/scrivener_service.dart';
@@ -5,7 +6,9 @@ import '../services/storage_access_service.dart';
 import '../services/cloud_storage_service.dart';
 import '../services/recent_projects_service.dart';
 import '../services/cloud_sync_service.dart';
+import '../services/web_storage_service.dart';
 import '../models/cloud_file.dart';
+import '../models/scrivener_project.dart';
 import 'project_editor_screen.dart';
 import 'cloud_browser_screen.dart';
 
@@ -566,8 +569,84 @@ class _HomeScreenState extends State<HomeScreen> {
     if (projectName == null || projectName.isEmpty) return;
     if (!context.mounted) return;
 
+    // Handle web platform differently
+    if (kIsWeb) {
+      await _createWebProject(context, projectName);
+    } else {
+      await _createFileSystemProject(context, projectName);
+    }
+  }
+
+  Future<void> _createWebProject(
+      BuildContext context, String projectName) async {
+    final scrivenerService = context.read<ScrivenerService>();
+    final webStorageService = context.read<WebStorageService>();
+    final recentService = context.read<RecentProjectsService>();
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      // Create project in memory (web_$projectName as path identifier)
+      final projectPath = 'web_${projectName.replaceAll(' ', '_')}';
+      final project = ScrivenerProject.empty(projectName, projectPath);
+
+      // Save to web storage
+      await webStorageService.saveProject(project);
+
+      // Set as current project in ScrivenerService
+      scrivenerService.setProject(project);
+
+      if (!context.mounted) return;
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      // Add to recent projects
+      await recentService.addRecentProject(
+        name: project.name,
+        path: project.path,
+      );
+
+      // Navigate to editor
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const ProjectEditorScreen(),
+        ),
+      );
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Project created in browser storage'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error creating project: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _createFileSystemProject(
+      BuildContext context, String projectName) async {
     final storageService = context.read<StorageAccessService>();
     final scrivenerService = context.read<ScrivenerService>();
+    final recentService = context.read<RecentProjectsService>();
 
     // Show loading indicator
     showDialog(
@@ -609,7 +688,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       // Add to recent projects
-      final recentService = context.read<RecentProjectsService>();
       await recentService.addRecentProject(
         name: scrivenerService.currentProject!.name,
         path: scrivenerService.currentProject!.path,
@@ -639,6 +717,7 @@ class _HomeScreenState extends State<HomeScreen> {
       BuildContext context, dynamic recentProject) async {
     final scrivenerService = context.read<ScrivenerService>();
     final recentService = context.read<RecentProjectsService>();
+    final webStorageService = context.read<WebStorageService>();
 
     // Show loading indicator
     showDialog(
@@ -650,8 +729,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     try {
-      // Load the project
-      await scrivenerService.loadProject(recentProject.path);
+      // Check if this is a web project
+      if (recentProject.path.startsWith('web_')) {
+        // Load from web storage
+        final project = await webStorageService.loadProject(recentProject.path);
+
+        if (project == null) {
+          throw Exception('Project not found in browser storage');
+        }
+
+        scrivenerService.setProject(project);
+      } else {
+        // Load from file system
+        await scrivenerService.loadProject(recentProject.path);
+      }
 
       if (!context.mounted) return;
 

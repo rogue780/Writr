@@ -60,6 +60,13 @@ class ScrivenerService extends ChangeNotifier {
     }
   }
 
+  /// Set a project directly (useful for web platform)
+  void setProject(ScrivenerProject project) {
+    _currentProject = project;
+    _error = null;
+    notifyListeners();
+  }
+
   /// Find the .scrivx file in the project directory
   Future<File?> _findScrivxFile(Directory projectDir) async {
     await for (final entity in projectDir.list()) {
