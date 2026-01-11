@@ -603,6 +603,11 @@ class _HomeScreenState extends State<HomeScreen> {
       // Set as current project in ScrivenerService
       scrivenerService.setProject(project);
 
+      // Setup auto-save callback for web projects
+      scrivenerService.setAutoSaveCallback((ScrivenerProject proj) async {
+        await webStorageService.saveProject(proj);
+      });
+
       if (!context.mounted) return;
 
       // Close loading dialog
@@ -739,6 +744,11 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         scrivenerService.setProject(project);
+
+        // Setup auto-save callback for web projects
+        scrivenerService.setAutoSaveCallback((ScrivenerProject proj) async {
+          await webStorageService.saveProject(proj);
+        });
       } else {
         // Load from file system
         await scrivenerService.loadProject(recentProject.path);

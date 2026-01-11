@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:archive/archive.dart';
+import 'package:xml/xml.dart';
 import '../models/scrivener_project.dart';
 
 /// Service for storing Scrivener projects in browser storage (web platform)
@@ -184,6 +187,193 @@ class WebStorageService extends ChangeNotifier {
       default:
         return BinderItemType.text;
     }
+  }
+
+  /// Export a project as a .scriv zip file
+  /// Returns the zip file bytes ready for download
+  Uint8List exportProject(ScrivenerProject project) {
+    final archive = Archive();
+
+    // Create .scrivx XML file
+    final scrivxContent = _createScrivxXml(project);
+    archive.addFile(ArchiveFile(
+      '${project.name}.scrivx',
+      scrivxContent.length,
+      scrivxContent,
+    ));
+
+    // Create Files/Data directory with text content files
+    for (final entry in project.textContents.entries) {
+      final content = utf8.encode(entry.value);
+      archive.addFile(ArchiveFile(
+        'Files/Data/${entry.key}.rtf',
+        content.length,
+        content,
+      ));
+    }
+
+    // Encode as zip
+    final zipEncoder = ZipEncoder();
+    final zipBytes = zipEncoder.encode(archive);
+
+    return Uint8List.fromList(zipBytes!);
+  }
+
+  /// Import a .scriv zip file and save to browser storage
+  Future<ScrivenerProject?> importProject(Uint8List zipBytes, String projectName) async {
+    try {
+      // Decode zip
+      final archive = ZipDecoder().decodeBytes(zipBytes);
+
+      // Find and parse .scrivx file
+      final scrivxFile = archive.files.firstWhere(
+        (file) => file.name.endsWith('.scrivx'),
+      );
+      final scrivxContent = utf8.decode(scrivxFile.content as List<int>);
+      final document = XmlDocument.parse(scrivxContent);
+
+      // Parse binder items
+      final binderItems = _parseBinderItemsFromXml(document);
+
+      // Load text contents from Files/Data
+      final textContents = <String, String>{};
+      for (final file in archive.files) {
+        if (file.name.startsWith('Files/Data/') && file.name.endsWith('.rtf')) {
+          final fileName = file.name.split('/').last;
+          final fileId = fileName.replaceAll('.rtf', '');
+          final content = utf8.decode(file.content as List<int>);
+          textContents[fileId] = content;
+        }
+      }
+
+      // Create project
+      final projectPath = 'web_${projectName.replaceAll(' ', '_')}';
+      final project = ScrivenerProject(
+        name: projectName,
+        path: projectPath,
+        binderItems: binderItems,
+        textContents: textContents,
+        settings: ProjectSettings.defaults(),
+      );
+
+      // Save to storage
+      await saveProject(project);
+
+      return project;
+    } catch (e) {
+      print('Error importing project: $e');
+      return null;
+    }
+  }
+
+  /// Get total storage used in bytes
+  int getStorageUsed() {
+    int total = 0;
+    for (final projectJson in _projects.values) {
+      final jsonString = json.encode(projectJson);
+      total += utf8.encode(jsonString).length;
+    }
+    return total;
+  }
+
+  /// Get storage used as human-readable string
+  String getStorageUsedFormatted() {
+    final bytes = getStorageUsed();
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  /// Create .scrivx XML content
+  List<int> _createScrivxXml(ScrivenerProject project) {
+    final builder = XmlBuilder();
+    builder.processing('xml', 'version="1.0" encoding="UTF-8"');
+    builder.element('ScrivenerProject', nest: () {
+      builder.attribute('Version', '2.0');
+      builder.attribute('Identifier', project.path);
+
+      builder.element('Binder', nest: () {
+        for (final item in project.binderItems) {
+          _buildBinderItemXml(builder, item);
+        }
+      });
+    });
+
+    final xmlString = builder.buildDocument().toXmlString(pretty: true);
+    return utf8.encode(xmlString);
+  }
+
+  /// Build XML for a binder item recursively
+  void _buildBinderItemXml(XmlBuilder builder, BinderItem item) {
+    builder.element('BinderItem', nest: () {
+      builder.attribute('ID', item.id);
+      builder.attribute('Type', _binderItemTypeToString(item.type));
+      builder.element('Title', nest: item.title);
+
+      if (item.children.isNotEmpty) {
+        builder.element('Children', nest: () {
+          for (final child in item.children) {
+            _buildBinderItemXml(builder, child);
+          }
+        });
+      }
+    });
+  }
+
+  /// Convert BinderItemType to string for XML
+  String _binderItemTypeToString(BinderItemType type) {
+    switch (type) {
+      case BinderItemType.folder:
+        return 'Folder';
+      case BinderItemType.text:
+        return 'Text';
+      case BinderItemType.image:
+        return 'Image';
+      case BinderItemType.pdf:
+        return 'PDF';
+      case BinderItemType.webArchive:
+        return 'WebArchive';
+    }
+  }
+
+  /// Parse binder items from XML
+  List<BinderItem> _parseBinderItemsFromXml(XmlDocument document) {
+    final binderElement = document.findAllElements('Binder').firstOrNull;
+    if (binderElement == null) return [];
+
+    final items = <BinderItem>[];
+    for (final child in binderElement.children.whereType<XmlElement>()) {
+      if (child.name.local == 'BinderItem') {
+        final item = _parseBinderItemFromXml(child);
+        if (item != null) items.add(item);
+      }
+    }
+    return items;
+  }
+
+  /// Parse a single binder item from XML recursively
+  BinderItem? _parseBinderItemFromXml(XmlElement element) {
+    final id = element.getAttribute('ID') ?? '';
+    final type = element.getAttribute('Type') ?? 'Text';
+    final title = element.findElements('Title').firstOrNull?.innerText ?? 'Untitled';
+
+    final children = <BinderItem>[];
+    final childrenElement = element.findElements('Children').firstOrNull;
+    if (childrenElement != null) {
+      for (final child in childrenElement.children.whereType<XmlElement>()) {
+        if (child.name.local == 'BinderItem') {
+          final childItem = _parseBinderItemFromXml(child);
+          if (childItem != null) children.add(childItem);
+        }
+      }
+    }
+
+    return BinderItem(
+      id: id,
+      title: title,
+      type: _parseBinderItemType('BinderItemType.${type.toLowerCase()}'),
+      children: children,
+    );
   }
 
   /// Clear all error state

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:xml/xml.dart';
 import 'package:path/path.dart' as path;
@@ -8,10 +9,19 @@ class ScrivenerService extends ChangeNotifier {
   ScrivenerProject? _currentProject;
   bool _isLoading = false;
   String? _error;
+  Timer? _autoSaveTimer;
+  bool _hasUnsavedChanges = false;
+  Function? _onAutoSave; // Callback for web storage auto-save
 
   ScrivenerProject? get currentProject => _currentProject;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get hasUnsavedChanges => _hasUnsavedChanges;
+
+  /// Set a callback for auto-save (used by web storage)
+  void setAutoSaveCallback(Function callback) {
+    _onAutoSave = callback;
+  }
 
   /// Load a Scrivener project from a .scriv directory
   Future<void> loadProject(String projectPath) async {
@@ -64,7 +74,36 @@ class ScrivenerService extends ChangeNotifier {
   void setProject(ScrivenerProject project) {
     _currentProject = project;
     _error = null;
+    _hasUnsavedChanges = false;
     notifyListeners();
+  }
+
+  /// Trigger auto-save with debouncing
+  void _triggerAutoSave() {
+    _hasUnsavedChanges = true;
+    notifyListeners();
+
+    // Cancel existing timer
+    _autoSaveTimer?.cancel();
+
+    // Start new timer (2 seconds delay)
+    _autoSaveTimer = Timer(const Duration(seconds: 2), () async {
+      if (_onAutoSave != null && _currentProject != null) {
+        try {
+          await _onAutoSave!(_currentProject!);
+          _hasUnsavedChanges = false;
+          notifyListeners();
+        } catch (e) {
+          print('Auto-save error: $e');
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoSaveTimer?.cancel();
+    super.dispose();
   }
 
   /// Find the .scrivx file in the project directory
@@ -312,6 +351,7 @@ class ScrivenerService extends ChangeNotifier {
     );
 
     notifyListeners();
+    _triggerAutoSave(); // Trigger auto-save when content changes
   }
 
   /// Add a new binder item (folder or document)
