@@ -14,11 +14,33 @@ class ScrivenerProject {
   });
 
   factory ScrivenerProject.empty(String name, String path) {
-    // Create initial structure with Manuscript folder
-    final manuscriptId = DateTime.now().millisecondsSinceEpoch.toString();
+    // Create initial structure with standard Scrivener folders
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+
     final manuscript = BinderItem(
-      id: manuscriptId,
+      id: '${timestamp}_manuscript',
       title: 'Manuscript',
+      type: BinderItemType.folder,
+      children: [],
+    );
+
+    final research = BinderItem(
+      id: '${timestamp}_research',
+      title: 'Research',
+      type: BinderItemType.folder,
+      children: [],
+    );
+
+    final characters = BinderItem(
+      id: '${timestamp}_characters',
+      title: 'Characters',
+      type: BinderItemType.folder,
+      children: [],
+    );
+
+    final places = BinderItem(
+      id: '${timestamp}_places',
+      title: 'Places',
       type: BinderItemType.folder,
       children: [],
     );
@@ -26,7 +48,7 @@ class ScrivenerProject {
     return ScrivenerProject(
       name: name,
       path: path,
-      binderItems: [manuscript],
+      binderItems: [manuscript, research, characters, places],
       textContents: {},
       settings: ProjectSettings.defaults(),
     );
