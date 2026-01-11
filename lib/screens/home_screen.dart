@@ -3,11 +3,26 @@ import 'package:provider/provider.dart';
 import '../services/scrivener_service.dart';
 import '../services/storage_access_service.dart';
 import '../services/cloud_storage_service.dart';
+import '../services/recent_projects_service.dart';
 import 'project_editor_screen.dart';
 import 'cloud_browser_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Load recent projects when the screen initializes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<RecentProjectsService>().loadRecentProjects();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -140,6 +155,95 @@ class HomeScreen extends StatelessWidget {
                   );
                 }
                 return const SizedBox.shrink();
+              },
+            ),
+            const SizedBox(height: 32),
+            // Recent projects section
+            Consumer<RecentProjectsService>(
+              builder: (context, recentService, child) {
+                if (!recentService.isLoaded) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (recentService.recentProjects.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Recent Projects',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => _showClearRecentDialog(context),
+                          icon: const Icon(Icons.clear_all, size: 18),
+                          label: const Text('Clear'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ...recentService.recentProjects.map((project) {
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.deepPurple.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.book,
+                              color: Colors.deepPurple,
+                            ),
+                          ),
+                          title: Text(
+                            project.name,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 4),
+                              Text(
+                                project.path,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                project.getRelativeTime(),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[500],
+                                ),
+                              ),
+                            ],
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.close, size: 20),
+                            onPressed: () =>
+                                _removeRecentProject(context, project.path),
+                            tooltip: 'Remove from recent',
+                          ),
+                          onTap: () => _openRecentProject(context, project),
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                );
               },
             ),
             ],
@@ -307,6 +411,13 @@ class HomeScreen extends StatelessWidget {
         return;
       }
 
+      // Add to recent projects
+      final recentService = context.read<RecentProjectsService>();
+      await recentService.addRecentProject(
+        name: scrivenerService.currentProject!.name,
+        path: pathToLoad,
+      );
+
       // Navigate to editor
       Navigator.push(
         context,
@@ -404,6 +515,13 @@ class HomeScreen extends StatelessWidget {
         return;
       }
 
+      // Add to recent projects
+      final recentService = context.read<RecentProjectsService>();
+      await recentService.addRecentProject(
+        name: scrivenerService.currentProject!.name,
+        path: scrivenerService.currentProject!.path,
+      );
+
       // Navigate to editor
       Navigator.push(
         context,
@@ -421,6 +539,99 @@ class HomeScreen extends StatelessWidget {
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  Future<void> _openRecentProject(
+      BuildContext context, dynamic recentProject) async {
+    final scrivenerService = context.read<ScrivenerService>();
+    final recentService = context.read<RecentProjectsService>();
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      // Load the project
+      await scrivenerService.loadProject(recentProject.path);
+
+      if (!context.mounted) return;
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      if (scrivenerService.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${scrivenerService.error}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Update last opened time
+      await recentService.addRecentProject(
+        name: scrivenerService.currentProject!.name,
+        path: recentProject.path,
+      );
+
+      // Navigate to editor
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const ProjectEditorScreen(),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening project: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _removeRecentProject(BuildContext context, String path) async {
+    final recentService = context.read<RecentProjectsService>();
+    await recentService.removeRecentProject(path);
+  }
+
+  Future<void> _showClearRecentDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Recent Projects'),
+        content: const Text(
+          'Are you sure you want to clear all recent projects?\n\n'
+          'This will not delete the actual project files.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && context.mounted) {
+      final recentService = context.read<RecentProjectsService>();
+      await recentService.clearRecentProjects();
     }
   }
 }
