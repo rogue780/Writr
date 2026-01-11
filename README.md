@@ -19,12 +19,20 @@ A cross-platform Scrivener-compatible application built with Flutter that allows
 - **Project Structure**: Maintains Scrivener's project structure including Files/Data directories
 
 ### File System Integration
-- **Native File Pickers**: Uses platform-native file dialogs on all platforms
-- **Cloud Storage**: Access Google Drive, Dropbox, OneDrive through installed apps (mobile)
-- **Local Storage**: Direct access to local files and folders
-- **Network Drives**: Access network-mounted drives (desktop)
-- **External Drives**: USB drives, SD cards, external HDDs
-- **No API Keys Required**: No OAuth or API setup needed!
+
+**Two Ways to Access Cloud Storage:**
+
+1. **Native File Picker (Recommended - No Setup)**
+   - Uses platform-native file dialogs
+   - Works with installed cloud apps (Google Drive, Dropbox, OneDrive)
+   - Access local storage, network drives, external drives
+   - Zero configuration required
+
+2. **Direct Cloud API Access (Optional - Requires Setup)**
+   - Browse cloud files directly in the app
+   - Google Drive, Dropbox, OneDrive integration
+   - Requires one-time OAuth configuration
+   - See [Cloud API Setup Guide](docs/CLOUD_API_SETUP.md)
 
 ### User Interface
 - **Binder View**: Collapsible tree view for navigating your project structure
@@ -88,9 +96,22 @@ cd Writr
 flutter pub get
 ```
 
-### Running and Building
+### Cloud Storage Setup (Optional)
 
-**Note**: No cloud storage configuration needed! The app uses native file pickers on all platforms.
+By default, Writr uses native file pickers - **no configuration needed!**
+
+If you want to use **Direct Cloud API Access** (browse cloud files in-app):
+
+1. See the [Cloud API Setup Guide](docs/CLOUD_API_SETUP.md) for detailed instructions
+2. Configure OAuth credentials for:
+   - Google Drive (Google Cloud Console)
+   - Dropbox (Dropbox App Console)
+   - OneDrive (Azure Portal)
+3. Update provider files with your API keys/client IDs
+
+**Note:** Most users won't need this - the native file picker works great and requires zero setup!
+
+### Running and Building
 
 #### Run in Development
 ```bash
@@ -228,8 +249,11 @@ You can trigger a manual build anytime:
 1. **RTF Support**: Currently treats all documents as plain text
 2. **Media Files**: Images and PDFs displayed but not editable
 3. **Compile**: Scrivener's compile feature not yet implemented
-4. **Cloud App Required** (Mobile): To access cloud storage on Android, you must have the respective app installed (Google Drive, Dropbox, etc.)
+4. **Cloud Storage Access**:
+   - **Native file picker**: Requires cloud apps installed (Google Drive, Dropbox, etc.)
+   - **Direct API access**: Requires OAuth setup (optional, see docs)
 5. **Web File System**: Web version uses browser storage with limited file system access. Desktop/mobile apps recommended for full functionality
+6. **OAuth Flow**: Cloud API authentication currently requires manual token handling. Consider using flutter_web_auth for production (see setup guide)
 
 ## Contributing
 

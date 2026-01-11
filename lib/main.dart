@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
 import 'services/scrivener_service.dart';
 import 'services/storage_access_service.dart';
+import 'services/cloud_storage_service.dart';
 
 void main() {
   runApp(const WritrApp());
@@ -17,6 +18,7 @@ class WritrApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ScrivenerService()),
         ChangeNotifierProvider(create: (_) => StorageAccessService()),
+        ChangeNotifierProvider(create: (_) => CloudStorageService()),
       ],
       child: MaterialApp(
         title: 'Writr - Scrivener Editor',

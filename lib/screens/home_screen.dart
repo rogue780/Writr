@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/scrivener_service.dart';
 import '../services/storage_access_service.dart';
+import '../services/cloud_storage_service.dart';
 import 'project_editor_screen.dart';
+import 'cloud_browser_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -56,12 +58,15 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Writr uses native file pickers to access your projects from anywhere:\n\n'
-                      '• Local storage\n'
-                      '• Network drives\n'
-                      '• Cloud storage (Google Drive, Dropbox, OneDrive)\n'
-                      '• External drives\n\n'
-                      'No API keys or login required!',
+                      'Writr provides two ways to access your projects:\n\n'
+                      '1. Native File Picker (recommended):\n'
+                      '   • Local storage, network drives, external drives\n'
+                      '   • Works with installed cloud apps\n'
+                      '   • No setup required\n\n'
+                      '2. Direct Cloud API Access:\n'
+                      '   • Google Drive, Dropbox, OneDrive\n'
+                      '   • Requires API configuration\n'
+                      '   • Browse and manage cloud files',
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.blue.shade900,
@@ -75,7 +80,7 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 32),
             // Open existing project button
             ElevatedButton.icon(
-              onPressed: () => _openExistingProject(context),
+              onPressed: () => _showOpenProjectOptions(context),
               icon: const Icon(Icons.folder_open, size: 28),
               label: const Text(
                 'Open Project',
@@ -142,6 +147,116 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showOpenProjectOptions(BuildContext context) async {
+    final option = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Open Project'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.folder, color: Colors.blue),
+              title: const Text('File Picker'),
+              subtitle: const Text('Use native file picker (recommended)'),
+              onTap: () => Navigator.pop(context, 'file_picker'),
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.cloud, color: Colors.green),
+              title: const Text('Google Drive'),
+              subtitle: const Text('Browse with Google Drive API'),
+              onTap: () => Navigator.pop(context, 'google_drive'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.cloud, color: Colors.blue),
+              title: const Text('Dropbox'),
+              subtitle: const Text('Browse with Dropbox API'),
+              onTap: () => Navigator.pop(context, 'dropbox'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.cloud, color: Colors.purple),
+              title: const Text('OneDrive'),
+              subtitle: const Text('Browse with OneDrive API'),
+              onTap: () => Navigator.pop(context, 'onedrive'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (option == null || !context.mounted) return;
+
+    switch (option) {
+      case 'file_picker':
+        await _openExistingProject(context);
+        break;
+      case 'google_drive':
+        await _openCloudProject(context, CloudProvider.googleDrive);
+        break;
+      case 'dropbox':
+        await _openCloudProject(context, CloudProvider.dropbox);
+        break;
+      case 'onedrive':
+        await _openCloudProject(context, CloudProvider.oneDrive);
+        break;
+    }
+  }
+
+  Future<void> _openCloudProject(
+      BuildContext context, CloudProvider provider) async {
+    final cloudService = context.read<CloudStorageService>();
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    // Sign in to provider
+    final success = await cloudService.selectProvider(provider);
+
+    if (!context.mounted) return;
+
+    // Close loading
+    Navigator.pop(context);
+
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Failed to sign in to ${cloudService.currentProvider?.providerName ?? "cloud provider"}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Navigate to cloud browser
+    final selectedProject = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const CloudBrowserScreen(),
+      ),
+    );
+
+    // TODO: Handle selected cloud project - download and open it
+    // This would require implementing cloud project download logic
+    if (selectedProject != null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Cloud project loading not yet fully implemented. Working on download logic...'),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _openExistingProject(BuildContext context) async {
