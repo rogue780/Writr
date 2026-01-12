@@ -81,7 +81,7 @@ class _CloudBrowserScreenState extends State<CloudBrowserScreen> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await cloudService.signOut();
-              if (mounted) {
+              if (context.mounted) {
                 Navigator.of(context).pop();
               }
             },

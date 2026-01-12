@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +7,7 @@ import '../services/web_storage_service.dart';
 import '../models/scrivener_project.dart';
 import '../widgets/binder_tree_view.dart';
 import '../widgets/document_editor.dart';
+// ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
 
 class ProjectEditorScreen extends StatefulWidget {
@@ -198,7 +198,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
       // Trigger download in browser
       final blob = html.Blob([zipBytes]);
       final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
+      html.AnchorElement(href: url)
         ..setAttribute('download', '${service.currentProject!.name}.scriv.zip')
         ..click();
       html.Url.revokeObjectUrl(url);

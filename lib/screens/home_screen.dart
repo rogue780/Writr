@@ -246,7 +246,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           onTap: () => _openRecentProject(context, project),
                         ),
                       );
-                    }).toList(),
+                    }),
                   ],
                 );
               },
@@ -426,6 +426,8 @@ class _HomeScreenState extends State<HomeScreen> {
           path: localPath,
         );
 
+        if (!context.mounted) return;
+
         // Navigate to editor
         Navigator.push(
           context,
@@ -433,6 +435,8 @@ class _HomeScreenState extends State<HomeScreen> {
             builder: (_) => const ProjectEditorScreen(),
           ),
         );
+
+        if (!context.mounted) return;
 
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
@@ -513,6 +517,8 @@ class _HomeScreenState extends State<HomeScreen> {
         name: scrivenerService.currentProject!.name,
         path: pathToLoad,
       );
+
+      if (!context.mounted) return;
 
       // Navigate to editor
       Navigator.push(
@@ -619,6 +625,8 @@ class _HomeScreenState extends State<HomeScreen> {
         path: project.path,
       );
 
+      if (!context.mounted) return;
+
       // Navigate to editor
       Navigator.push(
         context,
@@ -626,6 +634,8 @@ class _HomeScreenState extends State<HomeScreen> {
           builder: (_) => const ProjectEditorScreen(),
         ),
       );
+
+      if (!context.mounted) return;
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
@@ -697,6 +707,8 @@ class _HomeScreenState extends State<HomeScreen> {
         name: scrivenerService.currentProject!.name,
         path: scrivenerService.currentProject!.path,
       );
+
+      if (!context.mounted) return;
 
       // Navigate to editor
       Navigator.push(
@@ -774,6 +786,8 @@ class _HomeScreenState extends State<HomeScreen> {
         name: scrivenerService.currentProject!.name,
         path: recentProject.path,
       );
+
+      if (!context.mounted) return;
 
       // Navigate to editor
       Navigator.push(
