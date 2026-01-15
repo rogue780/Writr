@@ -44,6 +44,11 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^3.0.1
 
+# Workaround for quill_native_bridge_windows GMEM_MOVEABLE error
+# See: https://github.com/singerdmx/flutter-quill/issues/2612
+dependency_overrides:
+  quill_native_bridge_windows: 0.0.1
+
 flutter:
   uses-material-design: true
 
