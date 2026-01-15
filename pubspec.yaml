@@ -46,8 +46,10 @@ dev_dependencies:
 
 # Workaround for quill_native_bridge_windows GMEM_MOVEABLE error
 # See: https://github.com/singerdmx/flutter-quill/issues/2612
+# The win32 package moved GMEM_MOVEABLE to GLOBAL_ALLOC_FLAGS.GMEM_MOVEABLE
+# Pin to older win32 version that has the old API
 dependency_overrides:
-  quill_native_bridge_windows: 0.0.1
+  win32: 5.5.0
 
 flutter:
   uses-material-design: true
