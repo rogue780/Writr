@@ -22,7 +22,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.27.0'
           channel: 'stable'
           cache: true
 
@@ -31,9 +31,6 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
-
-      - name: Create Windows platform files
-        run: flutter create --project-name=writr --platforms=windows .
 
       - name: Build Windows
         run: flutter build windows --release
@@ -69,7 +66,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.27.0'
           channel: 'stable'
           cache: true
 
@@ -78,9 +75,6 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
-
-      - name: Create macOS platform files
-        run: flutter create --project-name=writr --platforms=macos .
 
       - name: Build macOS
         run: flutter build macos --release
@@ -119,7 +113,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.27.0'
           channel: 'stable'
           cache: true
 
@@ -128,9 +122,6 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
-
-      - name: Create Linux platform files
-        run: flutter create --project-name=writr --platforms=linux .
 
       - name: Build Linux
         run: flutter build linux --release

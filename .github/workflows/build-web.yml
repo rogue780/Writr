@@ -33,7 +33,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.27.0'
           channel: 'stable'
           cache: true
 
@@ -42,9 +42,6 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
-
-      - name: Create web platform files
-        run: flutter create --project-name=writr --platforms=web .
 
       - name: Build web
         run: flutter build web --release --base-href /Writr/
