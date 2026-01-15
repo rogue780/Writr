@@ -1,0 +1,186 @@
+name: Build Desktop
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Create Windows platform files
+        run: flutter create --project-name=writr --platforms=windows .
+
+      - name: Build Windows
+        run: flutter build windows --release
+
+      - name: Get version info
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Windows archive
+        shell: bash
+        run: |
+          cd build/windows/x64/runner/Release
+          7z a -tzip ../../../../../writr-windows-${{ steps.version.outputs.version }}.zip *
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: writr-windows-${{ steps.version.outputs.version }}
+          path: writr-windows-${{ steps.version.outputs.version }}.zip
+          retention-days: 90
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Enable macOS desktop
+        run: flutter config --enable-macos-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Create macOS platform files
+        run: flutter create --project-name=writr --platforms=macos .
+
+      - name: Build macOS
+        run: flutter build macos --release
+
+      - name: Get version info
+        id: version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create macOS archive
+        run: |
+          cd build/macos/Build/Products/Release
+          zip -r ../../../../../writr-macos-${{ steps.version.outputs.version }}.zip writr.app
+
+      - name: Upload macOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: writr-macos-${{ steps.version.outputs.version }}
+          path: writr-macos-${{ steps.version.outputs.version }}.zip
+          retention-days: 90
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Enable Linux desktop
+        run: flutter config --enable-linux-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Create Linux platform files
+        run: flutter create --project-name=writr --platforms=linux .
+
+      - name: Build Linux
+        run: flutter build linux --release
+
+      - name: Get version info
+        id: version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Linux archive
+        run: |
+          cd build/linux/x64/release/bundle
+          tar -czf ../../../../../writr-linux-${{ steps.version.outputs.version }}.tar.gz *
+
+      - name: Upload Linux build
+        uses: actions/upload-artifact@v4
+        with:
+          name: writr-linux-${{ steps.version.outputs.version }}
+          path: writr-linux-${{ steps.version.outputs.version }}.tar.gz
+          retention-days: 90
+
+  summary:
+    name: Build Summary
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create summary
+        run: |
+          echo "## Desktop Builds Complete! 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts Generated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Windows**: \`writr-windows-${{ steps.version.outputs.version }}.zip\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **macOS**: \`writr-macos-${{ steps.version.outputs.version }}.zip\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Linux**: \`writr-linux-${{ steps.version.outputs.version }}.tar.gz\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Installation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Windows**: Extract zip and run \`writr.exe\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**macOS**: Extract zip and move \`writr.app\` to Applications" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Linux**: Extract tar.gz and run \`./writr\`" >> $GITHUB_STEP_SUMMARY

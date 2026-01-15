@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command:*)",
+      "Bash(flutter run:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(cmd /c \"flutter analyze lib/screens/project_editor_screen.dart lib/widgets/split_editor.dart lib/models/editor_state.dart\")"
+    ]
+  }
+}

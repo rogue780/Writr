@@ -1,0 +1,115 @@
+name: Build and Deploy Web
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-web:
+    name: Build Web Version
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Enable web
+        run: flutter config --enable-web
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Create web platform files
+        run: flutter create --project-name=writr --platforms=web .
+
+      - name: Build web
+        run: flutter build web --release --base-href /Writr/
+
+      - name: Get version info
+        id: version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create build info file
+        run: |
+          cat > build/web/version.txt << EOF
+          Writr Web Version ${{ steps.version.outputs.version }}
+          Built: $(date -u)
+          Commit: ${{ github.sha }}
+          EOF
+
+      - name: Upload web build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: writr-web-${{ steps.version.outputs.version }}
+          path: build/web
+          retention-days: 90
+
+      - name: Setup Pages
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/')
+        uses: actions/configure-pages@v4
+        continue-on-error: true
+
+      - name: Upload artifact to Pages
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/')
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/')
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build-web
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Create deployment summary
+        run: |
+          echo "## Web Version Deployed! 🌐" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Live Demo" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 **[Try Writr Online](${{ steps.deployment.outputs.page_url }})**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Web Features" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Try the app without installing" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Create and edit projects in browser" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Full binder and editor interface" >> $GITHUB_STEP_SUMMARY
+          echo "- ⚠️ File system access limited (use download/upload)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Note" >> $GITHUB_STEP_SUMMARY
+          echo "Web version has file system limitations. For full functionality," >> $GITHUB_STEP_SUMMARY
+          echo "download the desktop app (Windows/macOS/Linux) or mobile APK." >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,51 @@
+name: writr
+description: A Scrivener-compatible Android app for reading and writing .scrivx/.scriv projects with cloud storage integration.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # UI Components
+  cupertino_icons: ^1.0.6
+
+  # State Management
+  provider: ^6.1.1
+
+  # File handling via Storage Access Framework
+  path_provider: ^2.1.2
+  path: ^1.8.3
+  file_picker: ^6.1.1
+
+  # XML parsing for Scrivener files
+  xml: ^6.5.0
+
+  # Rich Text Editing
+  flutter_quill: ^9.3.11
+
+  # Cloud Storage - OAuth & API Integration
+  googleapis: ^13.1.0
+  googleapis_auth: ^1.6.0
+  google_sign_in: ^6.2.1
+  http: ^1.2.0
+  shared_preferences: ^2.2.2
+  url_launcher: ^6.2.4
+  flutter_web_auth: ^0.5.0
+  archive: ^3.4.10
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+
+  # assets:
+  #   - assets/images/
