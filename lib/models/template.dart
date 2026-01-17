@@ -60,24 +60,42 @@ class DocumentTemplate {
   }
 
   factory DocumentTemplate.fromJson(Map<String, dynamic> json) {
+    final type = DocumentTemplateType.values.firstWhere(
+      (t) => t.name == json['type'],
+      orElse: () => DocumentTemplateType.general,
+    );
+
     return DocumentTemplate(
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String,
       content: json['content'] as String,
-      type: DocumentTemplateType.values.firstWhere(
-        (t) => t.name == json['type'],
-        orElse: () => DocumentTemplateType.general,
-      ),
-      icon: IconData(
-        json['icon'] as int? ?? Icons.description.codePoint,
-        fontFamily: 'MaterialIcons',
-      ),
+      type: type,
+      icon: _documentTemplateIconFromCodePoint(json['icon'] as int?) ??
+          type.icon,
       isBuiltIn: json['isBuiltIn'] as bool? ?? false,
       createdAt: DateTime.parse(json['createdAt'] as String),
       metadata: Map<String, String>.from(json['metadata'] as Map? ?? {}),
     );
   }
+
+  static IconData? _documentTemplateIconFromCodePoint(int? codePoint) {
+    if (codePoint == null) return null;
+
+    return _documentTemplateIconsByCodePoint[codePoint];
+  }
+
+  static final Map<int, IconData> _documentTemplateIconsByCodePoint = {
+    Icons.description.codePoint: Icons.description,
+    Icons.menu_book.codePoint: Icons.menu_book,
+    Icons.movie.codePoint: Icons.movie,
+    Icons.person.codePoint: Icons.person,
+    Icons.place.codePoint: Icons.place,
+    Icons.public.codePoint: Icons.public,
+    Icons.format_list_numbered.codePoint: Icons.format_list_numbered,
+    Icons.note.codePoint: Icons.note,
+    Icons.science.codePoint: Icons.science,
+  };
 }
 
 /// Type of document template

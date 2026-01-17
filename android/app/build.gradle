@@ -24,7 +24,7 @@ if (flutterVersionName == null) {
 
 android {
     namespace "com.writr.writr"
-    compileSdk 34
+    compileSdk 36
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -41,8 +41,8 @@ android {
 
     defaultConfig {
         applicationId "com.writr.writr"
-        minSdkVersion 21
-        targetSdkVersion 34
+        minSdkVersion flutter.minSdkVersion
+        targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
     }

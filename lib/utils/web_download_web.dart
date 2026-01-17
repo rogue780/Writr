@@ -1,18 +1,22 @@
-import 'dart:html' as html;
 import 'dart:typed_data';
 import 'dart:convert';
+import 'dart:js_interop';
+
+import 'package:web/web.dart' as web;
 
 void downloadBytes(List<int> bytes, String filename) {
-  final blob = html.Blob([Uint8List.fromList(bytes)]);
-  final url = html.Url.createObjectUrlFromBlob(blob);
-  html.AnchorElement(href: url)
-    ..setAttribute('download', filename)
+  final blob = web.Blob([Uint8List.fromList(bytes).toJS].toJS);
+  final url = web.URL.createObjectURL(blob);
+
+  web.HTMLAnchorElement()
+    ..href = url
+    ..download = filename
     ..click();
-  html.Url.revokeObjectUrl(url);
+
+  web.URL.revokeObjectURL(url);
 }
 
 void downloadString(String content, String filename) {
   final bytes = utf8.encode(content);
   downloadBytes(bytes, filename);
 }
-
