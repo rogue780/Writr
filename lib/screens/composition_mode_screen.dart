@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_quill/flutter_quill.dart';
+import 'package:super_editor/super_editor.dart';
 import '../models/scrivener_project.dart';
+import '../widgets/super_editor_style_phases.dart';
 
 /// Full-screen distraction-free composition mode
 class CompositionModeScreen extends StatefulWidget {
@@ -24,8 +25,13 @@ class CompositionModeScreen extends StatefulWidget {
 }
 
 class _CompositionModeScreenState extends State<CompositionModeScreen> {
-  late QuillController _controller;
+  late MutableDocument _document;
+  late MutableDocumentComposer _composer;
+  late Editor _editor;
   late FocusNode _focusNode;
+  late ScrollController _scrollController;
+  final _documentLayoutKey = GlobalKey();
+  late final List<SingleColumnLayoutStylePhase> _customStylePhases;
   bool _showUI = true;
   Timer? _hideUITimer;
   bool _typewriterMode = true;
@@ -44,7 +50,9 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
   void initState() {
     super.initState();
     _focusNode = FocusNode();
-    _initializeController();
+    _scrollController = ScrollController();
+    _customStylePhases = [ClampInvalidTextSelectionStylePhase()];
+    _initializeEditor();
     _initialWordCount = _countWords(widget.content);
     _startHideUITimer();
 
@@ -52,29 +60,48 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
-  void _initializeController() {
-    final document = Document();
-    if (widget.content.isNotEmpty) {
-      document.insert(0, widget.content);
-    }
-    _controller = QuillController(
-      document: document,
-      selection: const TextSelection.collapsed(offset: 0),
+  void _initializeEditor() {
+    _document = _createDocumentFromContent(widget.content);
+    _composer = MutableDocumentComposer();
+    _editor = createDefaultDocumentEditor(
+      document: _document,
+      composer: _composer,
     );
-    _controller.addListener(_onDocumentChanged);
 
-    // Clear history after initialization
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _controller.document.history.clear();
-    });
+    _document.addListener(_onDocumentChangeLog);
+  }
+
+  MutableDocument _createDocumentFromContent(String content) {
+    final normalized = content.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    var lines = normalized.split('\n');
+
+    if (normalized.endsWith('\n') && lines.isNotEmpty && lines.last.isEmpty) {
+      lines = lines.sublist(0, lines.length - 1);
+    }
+
+    if (lines.isEmpty) {
+      return MutableDocument.empty();
+    }
+
+    return MutableDocument(
+      nodes: [
+        for (final line in lines)
+          ParagraphNode(
+            id: Editor.createNodeId(),
+            text: AttributedText(line),
+          ),
+      ],
+    );
   }
 
   @override
   void dispose() {
     _hideUITimer?.cancel();
-    _controller.removeListener(_onDocumentChanged);
-    _controller.dispose();
+    _document.removeListener(_onDocumentChangeLog);
+    _document.dispose();
+    _composer.dispose();
     _focusNode.dispose();
+    _scrollController.dispose();
 
     // Exit full screen mode
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -82,8 +109,8 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
     super.dispose();
   }
 
-  void _onDocumentChanged() {
-    final plainText = _controller.document.toPlainText();
+  void _onDocumentChangeLog(DocumentChangeLog changeLog) {
+    final plainText = _document.toPlainText();
     widget.onContentChanged(plainText);
 
     final currentWordCount = _countWords(plainText);
@@ -185,45 +212,62 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
       child: Container(
         width: _textWidth,
         padding: const EdgeInsets.symmetric(vertical: 100),
-        child: QuillEditor(
-          controller: _controller,
-          focusNode: _focusNode,
-          scrollController: ScrollController(),
-          config: QuillEditorConfig(
-            placeholder: 'Start writing...',
-            autoFocus: true,
-            expands: true,
-            scrollable: true,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            customStyles: DefaultStyles(
-              paragraph: DefaultTextBlockStyle(
-                TextStyle(
-                  color: _textColor,
-                  fontSize: _fontSize,
-                  fontFamily: _fontFamily,
-                  height: 1.8,
-                ),
-                const HorizontalSpacing(0, 0),
-                const VerticalSpacing(12, 12),
-                const VerticalSpacing(0, 0),
-                null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Stack(
+            children: [
+              SuperEditor(
+                editor: _editor,
+                focusNode: _focusNode,
+                autofocus: true,
+                scrollController: _scrollController,
+                documentLayoutKey: _documentLayoutKey,
+                stylesheet: _buildEditorStylesheet(),
+                customStylePhases: _customStylePhases,
               ),
-              placeHolder: DefaultTextBlockStyle(
-                TextStyle(
-                  color: _textColor.withValues(alpha: 0.3),
-                  fontSize: _fontSize,
-                  fontFamily: _fontFamily,
-                  fontStyle: FontStyle.italic,
+              if (_document.toPlainText().trim().isEmpty)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  child: IgnorePointer(
+                    child: Text(
+                      'Start writing...',
+                      style: TextStyle(
+                        color: _textColor.withValues(alpha: 0.3),
+                        fontSize: _fontSize,
+                        fontFamily: _fontFamily,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
                 ),
-                const HorizontalSpacing(0, 0),
-                const VerticalSpacing(0, 0),
-                const VerticalSpacing(0, 0),
-                null,
-              ),
-            ),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  Stylesheet _buildEditorStylesheet() {
+    final textStyle = TextStyle(
+      color: _textColor,
+      fontSize: _fontSize,
+      fontFamily: _fontFamily,
+      height: 1.8,
+    );
+
+    return defaultStylesheet.copyWith(
+      documentPadding: EdgeInsets.zero,
+      rules: [
+        StyleRule(
+          BlockSelector.all,
+          (doc, docNode) => {
+            Styles.maxWidth: double.infinity,
+            Styles.padding: const CascadingPadding.all(0),
+            Styles.textStyle: textStyle,
+          },
+        ),
+      ],
     );
   }
 
@@ -291,7 +335,7 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
   }
 
   Widget _buildBottomBar() {
-    final currentWordCount = _countWords(_controller.document.toPlainText());
+    final currentWordCount = _countWords(_document.toPlainText());
     final sessionDuration = DateTime.now().difference(_sessionStart);
 
     return Container(

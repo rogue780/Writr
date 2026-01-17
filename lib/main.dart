@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_quill/flutter_quill.dart';
 import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
 import 'services/scrivener_service.dart';
@@ -43,7 +42,6 @@ class WritrApp extends StatelessWidget {
           GlobalMaterialLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
-          FlutterQuillLocalizations.delegate,
         ],
         supportedLocales: const [
           Locale('en', 'US'),

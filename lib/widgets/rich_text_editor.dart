@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_quill/flutter_quill.dart';
-import '../models/scrivener_project.dart';
+import 'package:super_editor/super_editor.dart';
 import '../models/comment.dart';
+import '../models/scrivener_project.dart';
 import 'comment_bubble.dart';
+import 'super_editor_style_phases.dart';
 
-/// Rich text editor widget using flutter_quill for formatting support.
+/// Rich text editor widget using SuperEditor for formatting support.
 class RichTextEditor extends StatefulWidget {
   final BinderItem item;
   final String content;
@@ -42,8 +43,14 @@ class RichTextEditor extends StatefulWidget {
 }
 
 class _RichTextEditorState extends State<RichTextEditor> {
-  late QuillController _controller;
+  late MutableDocument _document;
+  late MutableDocumentComposer _composer;
+  late Editor _editor;
   late FocusNode _focusNode;
+  late ScrollController _scrollController;
+  final _documentLayoutKey = GlobalKey();
+  late final List<SingleColumnLayoutStylePhase> _customStylePhases;
+
   bool _hasUnsavedChanges = false;
   bool _isInitializing = true;
   String? _selectedCommentId;
@@ -56,52 +63,65 @@ class _RichTextEditorState extends State<RichTextEditor> {
   void initState() {
     super.initState();
     _focusNode = FocusNode();
-    _initializeController();
+    _scrollController = ScrollController();
+    _customStylePhases = [ClampInvalidTextSelectionStylePhase()];
+    _initializeEditor();
   }
 
-  void _initializeController() {
+  void _initializeEditor() {
     _isInitializing = true;
-    final document = _createDocumentFromContent(widget.content);
-    _controller = QuillController(
-      document: document,
-      selection: const TextSelection.collapsed(offset: 0),
+    _document = _createDocumentFromContent(widget.content);
+    _composer = MutableDocumentComposer();
+    _editor = createDefaultDocumentEditor(
+      document: _document,
+      composer: _composer,
     );
 
-    // Clear the undo/redo history after initialization
-    // This prevents "undo" from erasing the loaded content
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _controller.document.history.clear();
-      _isInitializing = false;
-    });
+    _document.addListener(_onDocumentChangeLog);
 
-    _controller.addListener(_onDocumentChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _isInitializing = false;
+      });
+    });
   }
 
-  /// Creates a Document from plain text content.
-  /// Uses Delta operations to avoid creating undo history during load.
-  Document _createDocumentFromContent(String content) {
-    if (content.isEmpty) {
-      return Document();
+  MutableDocument _createDocumentFromContent(String content) {
+    final normalized = content.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    var lines = normalized.split('\n');
+
+    // SuperEditor serializes each TextNode with a trailing '\n'. If the input
+    // already ends with '\n', avoid creating an extra empty paragraph node.
+    if (normalized.endsWith('\n') && lines.isNotEmpty && lines.last.isEmpty) {
+      lines = lines.sublist(0, lines.length - 1);
     }
 
-    // Create document with content but clear history afterward
-    // to prevent "undo" from removing the initial content
-    try {
-      final doc = Document();
-      doc.insert(0, content);
-      return doc;
-    } catch (e) {
-      return Document();
+    if (lines.isEmpty) {
+      return MutableDocument.empty();
     }
+
+    return MutableDocument(
+      nodes: [
+        for (final line in lines)
+          ParagraphNode(
+            id: Editor.createNodeId(),
+            text: AttributedText(line),
+          ),
+      ],
+    );
   }
 
   @override
   void didUpdateWidget(RichTextEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.item.id != widget.item.id) {
-      _controller.removeListener(_onDocumentChanged);
-      _controller.dispose();
-      _initializeController();
+      _document.removeListener(_onDocumentChangeLog);
+      _document.dispose();
+      _composer.dispose();
+
+      _initializeEditor();
+
       setState(() {
         _hasUnsavedChanges = false;
       });
@@ -110,26 +130,24 @@ class _RichTextEditorState extends State<RichTextEditor> {
 
   @override
   void dispose() {
-    _controller.removeListener(_onDocumentChanged);
-    _controller.dispose();
+    _document.removeListener(_onDocumentChangeLog);
+    _document.dispose();
+    _composer.dispose();
     _focusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  void _onDocumentChanged() {
-    // Don't mark as changed during initialization
+  void _onDocumentChangeLog(DocumentChangeLog changeLog) {
     if (_isInitializing) return;
 
     setState(() {
       _hasUnsavedChanges = true;
     });
 
-    // Convert document to plain text for storage
-    final plainText = _controller.document.toPlainText();
+    final plainText = _document.toPlainText();
     widget.onContentChanged(plainText);
-
-    // Also notify with full document if callback provided
-    widget.onDocumentChanged?.call(_controller.document);
+    widget.onDocumentChanged?.call(_document);
   }
 
   @override
@@ -141,29 +159,20 @@ class _RichTextEditorState extends State<RichTextEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Document header
           _buildHeader(context),
-
-          // Formatting toolbar
           if (widget.item.type == BinderItemType.text) _buildToolbar(context),
-
-          // Editor area with optional comment margin
           Expanded(
             child: widget.item.type == BinderItemType.text
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Main editor
                       Expanded(child: _buildEditor(context)),
-                      // Comment margin
                       if (widget.showCommentMargin && widget.comments.isNotEmpty)
                         _buildCommentMargin(context),
                     ],
                   )
                 : _buildNonEditableView(context),
           ),
-
-          // Status bar
           if (widget.item.type == BinderItemType.text) _buildStatusBar(context),
         ],
       ),
@@ -226,44 +235,25 @@ class _RichTextEditorState extends State<RichTextEditor> {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: QuillSimpleToolbar(
-              controller: _controller,
-              config: const QuillSimpleToolbarConfig(
-                showAlignmentButtons: true,
-                showBackgroundColorButton: true,
-                showBoldButton: true,
-                showCenterAlignment: true,
-                showClearFormat: true,
-                showCodeBlock: false,
-                showColorButton: true,
-                showDirection: false,
-                showDividers: true,
-                showFontFamily: true,
-                showFontSize: true,
-                showHeaderStyle: true,
-                showIndent: true,
-                showInlineCode: false,
-                showItalicButton: true,
-                showJustifyAlignment: true,
-                showLeftAlignment: true,
-                showLink: true,
-                showListBullets: true,
-                showListCheck: false,
-                showListNumbers: true,
-                showQuote: true,
-                showRedo: true,
-                showRightAlignment: true,
-                showSearchButton: false,
-                showSmallButton: false,
-                showStrikeThrough: true,
-                showSubscript: false,
-                showSuperscript: false,
-                showUnderLineButton: true,
-                showUndo: true,
-                multiRowsDisplay: false,
-              ),
-            ),
+          IconButton(
+            icon: const Icon(Icons.format_bold, size: 20),
+            tooltip: 'Bold',
+            onPressed: () => _toggleAttributions({boldAttribution}),
+          ),
+          IconButton(
+            icon: const Icon(Icons.format_italic, size: 20),
+            tooltip: 'Italic',
+            onPressed: () => _toggleAttributions({italicsAttribution}),
+          ),
+          IconButton(
+            icon: const Icon(Icons.format_underline, size: 20),
+            tooltip: 'Underline',
+            onPressed: () => _toggleAttributions({underlineAttribution}),
+          ),
+          IconButton(
+            icon: const Icon(Icons.format_strikethrough, size: 20),
+            tooltip: 'Strikethrough',
+            onPressed: () => _toggleAttributions({strikethroughAttribution}),
           ),
           // Divider
           Container(
@@ -282,7 +272,9 @@ class _RichTextEditorState extends State<RichTextEditor> {
               onPressed: () {
                 widget.onPageViewModeChanged?.call(!widget.pageViewMode);
               },
-              tooltip: widget.pageViewMode ? 'Switch to Standard View' : 'Switch to Page View',
+              tooltip: widget.pageViewMode
+                  ? 'Switch to Standard View'
+                  : 'Switch to Page View',
               color: widget.pageViewMode
                   ? Theme.of(context).colorScheme.primary
                   : null,
@@ -303,22 +295,41 @@ class _RichTextEditorState extends State<RichTextEditor> {
     );
   }
 
+  void _toggleAttributions(Set<Attribution> attributions) {
+    final selection = _composer.selection;
+    if (selection == null || selection.isCollapsed) {
+      _composer.preferences.toggleStyles(attributions);
+      return;
+    }
+
+    _editor.execute([
+      ToggleTextAttributionsRequest(
+        documentRange: selection,
+        attributions: attributions,
+      ),
+    ]);
+  }
+
   void _showAddCommentDialog() {
-    final selection = _controller.selection;
-    if (selection.baseOffset == selection.extentOffset) {
+    final selection = _composer.selection;
+    if (selection == null || selection.isCollapsed) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Select text to add a comment')),
       );
       return;
     }
 
+    final range = selection.normalize(_document);
+    final startOffset = _plainTextOffsetFromDocumentPosition(range.start);
+    final endOffset = _plainTextOffsetFromDocumentPosition(range.end);
+
     showDialog(
       context: context,
       builder: (context) => NewCommentDialog(
         onCreate: (commentText, colorValue) {
           widget.onAddComment?.call(
-            selection.baseOffset,
-            selection.extentOffset,
+            startOffset,
+            endOffset,
             commentText,
             colorValue,
           );
@@ -328,19 +339,36 @@ class _RichTextEditorState extends State<RichTextEditor> {
   }
 
   Widget _buildEditor(BuildContext context) {
-    final editor = QuillEditor.basic(
-      controller: _controller,
-      focusNode: _focusNode,
-      config: const QuillEditorConfig(
-        placeholder: 'Start writing...',
-        padding: EdgeInsets.zero,
-        autoFocus: true,
-        expands: true,
-        scrollable: true,
-      ),
+    final theme = Theme.of(context);
+    final stylesheet = _buildEditorStylesheet(theme);
+
+    final editor = Stack(
+      children: [
+        SuperEditor(
+          editor: _editor,
+          focusNode: _focusNode,
+          autofocus: true,
+          scrollController: _scrollController,
+          documentLayoutKey: _documentLayoutKey,
+          stylesheet: stylesheet,
+          customStylePhases: _customStylePhases,
+        ),
+        if (_document.toPlainText().trim().isEmpty)
+          Positioned(
+            left: 0,
+            top: 0,
+            child: IgnorePointer(
+              child: Text(
+                'Start writing...',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[500],
+                ),
+              ),
+            ),
+          ),
+      ],
     );
 
-    // Page view mode - centered paper-like container
     if (widget.pageViewMode) {
       return Container(
         color: Colors.grey[300],
@@ -373,10 +401,31 @@ class _RichTextEditorState extends State<RichTextEditor> {
       );
     }
 
-    // Standard edge-to-edge mode
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: editor,
+    );
+  }
+
+  Stylesheet _buildEditorStylesheet(ThemeData theme) {
+    final textStyle = TextStyle(
+      color: theme.colorScheme.onSurface,
+      fontSize: 16,
+      height: 1.5,
+    );
+
+    return defaultStylesheet.copyWith(
+      documentPadding: EdgeInsets.zero,
+      rules: [
+        StyleRule(
+          BlockSelector.all,
+          (doc, docNode) => {
+            Styles.maxWidth: double.infinity,
+            Styles.padding: const CascadingPadding.all(0),
+            Styles.textStyle: textStyle,
+          },
+        ),
+      ],
     );
   }
 
@@ -404,7 +453,7 @@ class _RichTextEditorState extends State<RichTextEditor> {
   }
 
   Widget _buildStatusBar(BuildContext context) {
-    final plainText = _controller.document.toPlainText();
+    final plainText = _document.toPlainText();
     final wordCount = _countWords(plainText);
     final charCount = plainText.length;
 
@@ -457,7 +506,6 @@ class _RichTextEditorState extends State<RichTextEditor> {
   }
 
   Widget _buildCommentMargin(BuildContext context) {
-    // Sort comments by their start offset
     final sortedComments = [...widget.comments]
       ..sort((a, b) => a.startOffset.compareTo(b.startOffset));
 
@@ -472,7 +520,6 @@ class _RichTextEditorState extends State<RichTextEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -494,7 +541,6 @@ class _RichTextEditorState extends State<RichTextEditor> {
               ],
             ),
           ),
-          // Comment list
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(8),
@@ -508,7 +554,6 @@ class _RichTextEditorState extends State<RichTextEditor> {
                     setState(() {
                       _selectedCommentId = comment.id;
                     });
-                    // Navigate to comment position in editor
                     _navigateToComment(comment);
                   },
                   onResolve: widget.onResolveComment != null
@@ -536,14 +581,66 @@ class _RichTextEditorState extends State<RichTextEditor> {
   }
 
   void _navigateToComment(DocumentComment comment) {
-    // Move cursor to the start of the commented text
-    _controller.updateSelection(
-      TextSelection(
-        baseOffset: comment.startOffset,
-        extentOffset: comment.endOffset,
+    final base = _documentPositionFromPlainTextOffset(comment.startOffset);
+    final extent = _documentPositionFromPlainTextOffset(comment.endOffset);
+
+    _editor.execute([
+      ChangeSelectionRequest(
+        DocumentSelection(base: base, extent: extent),
+        SelectionChangeType.expandSelection,
+        SelectionReason.userInteraction,
       ),
-      ChangeSource.local,
-    );
+    ]);
+
     _focusNode.requestFocus();
+  }
+
+  int _plainTextOffsetFromDocumentPosition(DocumentPosition position) {
+    var offset = 0;
+    for (final node in _document) {
+      if (node is! TextNode) continue;
+
+      if (node.id == position.nodeId) {
+        final nodePosition = position.nodePosition;
+        if (nodePosition is TextNodePosition) {
+          return offset + nodePosition.offset;
+        }
+        return offset;
+      }
+
+      offset += node.text.length + 1; // node text + '\n'
+    }
+
+    return offset;
+  }
+
+  DocumentPosition _documentPositionFromPlainTextOffset(int plainTextOffset) {
+    final safeOffset = plainTextOffset < 0 ? 0 : plainTextOffset;
+    var runningOffset = 0;
+
+    for (final node in _document) {
+      if (node is! TextNode) continue;
+
+      final nodeTextLength = node.text.length;
+      final nodeStart = runningOffset;
+      final nodeEnd = nodeStart + nodeTextLength;
+
+      if (safeOffset <= nodeEnd) {
+        final localOffset = (safeOffset - nodeStart).clamp(0, nodeTextLength);
+        return DocumentPosition(
+          nodeId: node.id,
+          nodePosition: TextNodePosition(offset: localOffset),
+        );
+      }
+
+      runningOffset += nodeTextLength + 1; // node text + '\n'
+    }
+
+    final lastTextNode =
+        _document.lastWhere((node) => node is TextNode, orElse: () => _document.first) as TextNode;
+    return DocumentPosition(
+      nodeId: lastTextNode.id,
+      nodePosition: TextNodePosition(offset: lastTextNode.text.length),
+    );
   }
 }
