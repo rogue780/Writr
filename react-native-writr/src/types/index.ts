@@ -42,6 +42,7 @@ export interface CloudFile {
   name: string;
   path: string;
   isDirectory: boolean;
+  isScrivenerProject?: boolean;
   size?: number;
   modifiedTime?: string;
   mimeType?: string;

@@ -13,7 +13,7 @@ export class CloudFileFactory {
     modifiedTime?: string,
     mimeType?: string,
   ): CloudFile {
-    return {
+    const file: CloudFile = {
       id,
       name,
       path,
@@ -22,6 +22,13 @@ export class CloudFileFactory {
       modifiedTime,
       mimeType,
     };
+
+    // Set isScrivenerProject flag
+    if (isDirectory && name.endsWith('.scriv')) {
+      file.isScrivenerProject = true;
+    }
+
+    return file;
   }
 
   /**

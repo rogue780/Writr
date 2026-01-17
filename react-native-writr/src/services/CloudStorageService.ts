@@ -6,10 +6,11 @@ import {GoogleDriveProvider} from './CloudProviders/GoogleDriveProvider';
  * Provides a unified interface for different cloud storage services
  */
 export class CloudStorageService {
+  private static instance: CloudStorageService;
   private currentProvider: CloudProvider | null = null;
   private providers: Map<CloudProviderType, CloudProvider>;
 
-  constructor() {
+  private constructor() {
     this.providers = new Map();
     this.providers.set(
       CloudProviderType.GOOGLE_DRIVE,
@@ -18,6 +19,13 @@ export class CloudStorageService {
     // Add other providers here:
     // this.providers.set(CloudProviderType.DROPBOX, new DropboxProvider());
     // this.providers.set(CloudProviderType.ONEDRIVE, new OneDriveProvider());
+  }
+
+  static getInstance(): CloudStorageService {
+    if (!CloudStorageService.instance) {
+      CloudStorageService.instance = new CloudStorageService();
+    }
+    return CloudStorageService.instance;
   }
 
   /**
@@ -150,6 +158,3 @@ export class CloudStorageService {
     return await this.currentProvider.search(query);
   }
 }
-
-// Export a singleton instance
-export default new CloudStorageService();

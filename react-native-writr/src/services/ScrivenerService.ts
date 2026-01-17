@@ -8,10 +8,12 @@ import {ScrivenerProjectFactory} from '../models/ScrivenerProject';
  * Handles loading, saving, and manipulating .scriv projects
  */
 export class ScrivenerService {
+  private static instance: ScrivenerService;
   private xmlParser: XMLParser;
   private xmlBuilder: XMLBuilder;
+  private error: string | null = null;
 
-  constructor() {
+  private constructor() {
     this.xmlParser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: '@_',
@@ -21,6 +23,21 @@ export class ScrivenerService {
       attributeNamePrefix: '@_',
       format: true,
     });
+  }
+
+  static getInstance(): ScrivenerService {
+    if (!ScrivenerService.instance) {
+      ScrivenerService.instance = new ScrivenerService();
+    }
+    return ScrivenerService.instance;
+  }
+
+  getError(): string | null {
+    return this.error;
+  }
+
+  private setError(error: string | null): void {
+    this.error = error;
   }
 
   /**

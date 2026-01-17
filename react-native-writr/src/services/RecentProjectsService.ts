@@ -10,6 +10,17 @@ const MAX_RECENT_PROJECTS = 10;
  * Uses AsyncStorage for persistence
  */
 export class RecentProjectsService {
+  private static instance: RecentProjectsService;
+
+  private constructor() {}
+
+  static getInstance(): RecentProjectsService {
+    if (!RecentProjectsService.instance) {
+      RecentProjectsService.instance = new RecentProjectsService();
+    }
+    return RecentProjectsService.instance;
+  }
+
   /**
    * Load all recent projects
    */

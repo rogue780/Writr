@@ -1,17 +1,34 @@
 import RNFS from 'react-native-fs';
 import {CloudFile, SyncProgress} from '../types';
-import CloudStorageService from './CloudStorageService';
+import {CloudStorageService} from './CloudStorageService';
 
 /**
  * Service for syncing Scrivener projects between cloud and local storage
  * Handles recursive upload/download of project directories
  */
 export class CloudSyncService {
-  private cloudStorageService: typeof CloudStorageService;
+  private static instance: CloudSyncService;
+  private cloudStorageService: CloudStorageService;
   private onProgress?: (progress: SyncProgress) => void;
+  private error: string | null = null;
 
-  constructor(cloudStorageService: typeof CloudStorageService) {
-    this.cloudStorageService = cloudStorageService;
+  private constructor() {
+    this.cloudStorageService = CloudStorageService.getInstance();
+  }
+
+  static getInstance(): CloudSyncService {
+    if (!CloudSyncService.instance) {
+      CloudSyncService.instance = new CloudSyncService();
+    }
+    return CloudSyncService.instance;
+  }
+
+  getError(): string | null {
+    return this.error;
+  }
+
+  private setError(error: string | null): void {
+    this.error = error;
   }
 
   /**

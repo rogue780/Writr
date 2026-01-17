@@ -6,6 +6,17 @@ import RNFS from 'react-native-fs';
  * Handles directory picking, file operations, and project directory management
  */
 export class StorageService {
+  private static instance: StorageService;
+
+  private constructor() {}
+
+  static getInstance(): StorageService {
+    if (!StorageService.instance) {
+      StorageService.instance = new StorageService();
+    }
+    return StorageService.instance;
+  }
+
   /**
    * Pick a Scrivener project directory
    */
