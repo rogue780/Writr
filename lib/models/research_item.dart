@@ -110,9 +110,15 @@ class ResearchItem {
 
   /// Get formatted file size string
   String get formattedFileSize {
-    if (fileSize == null) return 'Unknown size';
-    if (fileSize! < 1024) return '$fileSize B';
-    if (fileSize! < 1024 * 1024) return '${(fileSize! / 1024).toStringAsFixed(1)} KB';
+    if (fileSize == null) {
+      return 'Unknown size';
+    }
+    if (fileSize! < 1024) {
+      return '$fileSize B';
+    }
+    if (fileSize! < 1024 * 1024) {
+      return '${(fileSize! / 1024).toStringAsFixed(1)} KB';
+    }
     return '${(fileSize! / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 

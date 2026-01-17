@@ -79,7 +79,7 @@ jobs:
 
   deploy:
     name: Deploy to GitHub Pages
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/')
+    if: github.event_name == 'workflow_dispatch'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -97,7 +97,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Live Demo" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 **[Try Writr Online](${{ steps.deployment.outputs.page_url }})**" >> $GITHUB_STEP_SUMMARY
+          echo "- **Try Writr Online**: [Open](${{ steps.deployment.outputs.page_url }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Web Features" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
