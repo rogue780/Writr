@@ -330,6 +330,7 @@ class _RichTextEditorState extends State<RichTextEditor> {
   Widget _buildEditor(BuildContext context) {
     final editor = QuillEditor.basic(
       controller: _controller,
+      focusNode: _focusNode,
       config: const QuillEditorConfig(
         placeholder: 'Start writing...',
         padding: EdgeInsets.zero,

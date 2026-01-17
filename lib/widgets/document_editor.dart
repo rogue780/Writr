@@ -56,14 +56,14 @@ class _DocumentEditorState extends State<DocumentEditor> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Theme.of(context).colorScheme.background,
+      color: Theme.of(context).colorScheme.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceVariant,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               border: Border(
                 bottom: BorderSide(
                   color: Theme.of(context).dividerColor,
@@ -153,7 +153,7 @@ class _DocumentEditorState extends State<DocumentEditor> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceVariant,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border: Border(
                   top: BorderSide(
                     color: Theme.of(context).dividerColor,
