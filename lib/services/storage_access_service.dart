@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:permission_handler/permission_handler.dart';
 
 /// Service for accessing files through Android Storage Access Framework (SAF)
 /// This allows users to access cloud storage (Google Drive, Dropbox, OneDrive)
@@ -15,6 +16,63 @@ class StorageAccessService extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   String? get lastSelectedPath => _lastSelectedPath;
+
+  Future<void> openPermissionSettings() async {
+    await openAppSettings();
+  }
+
+  Future<bool> ensureStoragePermission({String? writableDirectory}) async {
+    if (kIsWeb || !Platform.isAndroid) {
+      return true;
+    }
+
+    if (writableDirectory != null) {
+      final canWrite = await _canWriteToDirectory(writableDirectory);
+      if (canWrite) {
+        return true;
+      }
+    }
+
+    final manageStatus = await Permission.manageExternalStorage.status;
+    if (!manageStatus.isGranted) {
+      final requested = await Permission.manageExternalStorage.request();
+      if (requested.isGranted) {
+        return true;
+      }
+    }
+
+    final storageStatus = await Permission.storage.status;
+    if (!storageStatus.isGranted) {
+      final requested = await Permission.storage.request();
+      if (requested.isGranted) {
+        return true;
+      }
+    }
+
+    if (writableDirectory != null) {
+      final canWrite = await _canWriteToDirectory(writableDirectory);
+      if (canWrite) {
+        return true;
+      }
+    }
+
+    _error = writableDirectory == null
+        ? 'Storage permission is required to access project files. Please grant file access in system settings.'
+        : 'Unable to write to the selected folder. On Android 11+, enable "All files access" for Writr in system settings, or choose a different folder.';
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> _canWriteToDirectory(String directoryPath) async {
+    try {
+      final testFile = File(path.join(directoryPath, '.writr_write_test'));
+      await testFile.writeAsString('test', flush: true);
+      await testFile.delete();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// Pick a Scrivener project directory using the system file picker
   /// This works with any storage provider that has a document provider:
@@ -48,6 +106,13 @@ class StorageAccessService extends ChangeNotifier {
         );
       }
 
+      final hasPermission = await ensureStoragePermission();
+      if (!hasPermission) {
+        _isLoading = false;
+        notifyListeners();
+        return null;
+      }
+
       _lastSelectedPath = selectedDirectory;
       _isLoading = false;
       notifyListeners();
@@ -78,6 +143,15 @@ class StorageAccessService extends ChangeNotifier {
         return null;
       }
 
+      final hasPermission = await ensureStoragePermission(
+        writableDirectory: selectedDirectory,
+      );
+      if (!hasPermission) {
+        _isLoading = false;
+        notifyListeners();
+        return null;
+      }
+
       _lastSelectedPath = selectedDirectory;
       _isLoading = false;
       notifyListeners();
@@ -98,6 +172,13 @@ class StorageAccessService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final hasPermission = await ensureStoragePermission();
+      if (!hasPermission) {
+        _isLoading = false;
+        notifyListeners();
+        return null;
+      }
+
       final cacheDir = await getApplicationCacheDirectory();
       final projectName = path.basename(sourcePath);
       final cachedPath = path.join(cacheDir.path, projectName);
@@ -130,6 +211,15 @@ class StorageAccessService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final hasPermission = await ensureStoragePermission(
+        writableDirectory: originalPath,
+      );
+      if (!hasPermission) {
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
       // Delete original directory contents
       final originalDir = Directory(originalPath);
       if (await originalDir.exists()) {

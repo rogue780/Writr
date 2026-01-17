@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/scrivener_service.dart';
+import '../services/storage_access_service.dart';
 import '../services/web_storage_service.dart';
 import '../services/search_service.dart';
 import '../services/collection_service.dart';
@@ -100,84 +101,105 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
           targetProgress = progress.progress;
         }
 
+        final colorScheme = Theme.of(context).colorScheme;
+
         return Scaffold(
           body: Column(
             children: [
               // Toolbar - either menu bar or simplified
-              if (_toolbarStyle == ToolbarStyle.menuBar)
-                AppMenuBar(
-                  showBinder: _showBinder,
-                  showInspector: _showInspector,
-                  showSearch: _showSearch,
-                  showCollections: _showCollections,
-                  viewMode: _viewMode,
-                  splitEditorEnabled: _splitEditorState.isSplitEnabled,
-                  onSave: _saveProject,
-                  onExport: kIsWeb ? _exportProject : null,
-                  onImport: kIsWeb ? _importProject : null,
-                  onBackups: () => _openBackupManager(service),
-                  onClose: () => Navigator.pop(context),
-                  onToggleBinder: () => setState(() => _showBinder = !_showBinder),
-                  onToggleInspector: () => setState(() => _showInspector = !_showInspector),
-                  onToggleSearch: () => setState(() => _showSearch = !_showSearch),
-                  onToggleCollections: () => setState(() => _showCollections = !_showCollections),
-                  onViewModeChanged: (mode) => setState(() => _viewMode = mode),
-                  onToggleSplitEditor: _toggleSplitEditor,
-                  onCompile: service.currentProject != null
-                      ? () => _openCompileScreen(service.currentProject!)
-                      : null,
-                  onTargets: () => _openTargetsDialog(service),
-                  onSessionTarget: () => _startSessionTarget(service),
-                  onStatistics: () => _openStatistics(service),
-                  onTemplateManager: _openTemplateManager,
-                  onInsertTemplate: () => _insertFromTemplate(service),
-                  onCompositionMode: () => _openCompositionMode(service),
-                  onNameGenerator: _openNameGenerator,
-                  onLinguisticAnalysis: () => _openLinguisticAnalysis(service),
-                  onKeywordManager: _openKeywordManager,
-                  onCustomFields: _openCustomFieldManager,
-                  onSwitchToSimplifiedToolbar: () {
-                    setState(() => _toolbarStyle = ToolbarStyle.simplified);
-                  },
-                )
-              else
-                SimplifiedToolbar(
-                  projectName: projectName,
-                  hasUnsavedChanges: hasUnsavedChanges,
-                  viewMode: _viewMode,
-                  showBinder: _showBinder,
-                  showInspector: _showInspector,
-                  showSearch: _showSearch,
-                  showCollections: _showCollections,
-                  splitEditorEnabled: _splitEditorState.isSplitEnabled,
-                  targetProgress: targetProgress,
-                  onViewModeChanged: (mode) => setState(() => _viewMode = mode),
-                  onToggleBinder: () => setState(() => _showBinder = !_showBinder),
-                  onToggleInspector: () => setState(() => _showInspector = !_showInspector),
-                  onToggleSearch: () => setState(() => _showSearch = !_showSearch),
-                  onToggleCollections: () => setState(() => _showCollections = !_showCollections),
-                  onToggleSplitEditor: _toggleSplitEditor,
-                  onSave: _saveProject,
-                  onExport: kIsWeb ? _exportProject : null,
-                  onImport: kIsWeb ? _importProject : null,
-                  onBackups: () => _openBackupManager(service),
-                  onCompile: service.currentProject != null
-                      ? () => _openCompileScreen(service.currentProject!)
-                      : null,
-                  onTargets: () => _openTargetsDialog(service),
-                  onSessionTarget: () => _startSessionTarget(service),
-                  onStatistics: () => _openStatistics(service),
-                  onTemplateManager: _openTemplateManager,
-                  onInsertTemplate: () => _insertFromTemplate(service),
-                  onCompositionMode: () => _openCompositionMode(service),
-                  onNameGenerator: _openNameGenerator,
-                  onLinguisticAnalysis: () => _openLinguisticAnalysis(service),
-                  onKeywordManager: _openKeywordManager,
-                  onCustomFields: _openCustomFieldManager,
-                  onSwitchToMenuBar: () {
-                    setState(() => _toolbarStyle = ToolbarStyle.menuBar);
-                  },
+              ColoredBox(
+                color: _toolbarStyle == ToolbarStyle.menuBar
+                    ? colorScheme.surfaceContainerHighest
+                    : colorScheme.surface,
+                child: SafeArea(
+                  bottom: false,
+                  child: _toolbarStyle == ToolbarStyle.menuBar
+                      ? AppMenuBar(
+                          showBinder: _showBinder,
+                          showInspector: _showInspector,
+                          showSearch: _showSearch,
+                          showCollections: _showCollections,
+                          viewMode: _viewMode,
+                          splitEditorEnabled: _splitEditorState.isSplitEnabled,
+                          onSave: _saveProject,
+                          onExport: kIsWeb ? _exportProject : null,
+                          onImport: kIsWeb ? _importProject : null,
+                          onBackups: () => _openBackupManager(service),
+                          onClose: () => Navigator.pop(context),
+                          onToggleBinder: () =>
+                              setState(() => _showBinder = !_showBinder),
+                          onToggleInspector: () =>
+                              setState(() => _showInspector = !_showInspector),
+                          onToggleSearch: () =>
+                              setState(() => _showSearch = !_showSearch),
+                          onToggleCollections: () =>
+                              setState(() => _showCollections = !_showCollections),
+                          onViewModeChanged: (mode) =>
+                              setState(() => _viewMode = mode),
+                          onToggleSplitEditor: _toggleSplitEditor,
+                          onCompile: service.currentProject != null
+                              ? () => _openCompileScreen(service.currentProject!)
+                              : null,
+                          onTargets: () => _openTargetsDialog(service),
+                          onSessionTarget: () => _startSessionTarget(service),
+                          onStatistics: () => _openStatistics(service),
+                          onTemplateManager: _openTemplateManager,
+                          onInsertTemplate: () => _insertFromTemplate(service),
+                          onCompositionMode: () => _openCompositionMode(service),
+                          onNameGenerator: _openNameGenerator,
+                          onLinguisticAnalysis: () =>
+                              _openLinguisticAnalysis(service),
+                          onKeywordManager: _openKeywordManager,
+                          onCustomFields: _openCustomFieldManager,
+                          onSwitchToSimplifiedToolbar: () {
+                            setState(() => _toolbarStyle = ToolbarStyle.simplified);
+                          },
+                        )
+                      : SimplifiedToolbar(
+                          projectName: projectName,
+                          hasUnsavedChanges: hasUnsavedChanges,
+                          viewMode: _viewMode,
+                          showBinder: _showBinder,
+                          showInspector: _showInspector,
+                          showSearch: _showSearch,
+                          showCollections: _showCollections,
+                          splitEditorEnabled: _splitEditorState.isSplitEnabled,
+                          targetProgress: targetProgress,
+                          onViewModeChanged: (mode) =>
+                              setState(() => _viewMode = mode),
+                          onToggleBinder: () =>
+                              setState(() => _showBinder = !_showBinder),
+                          onToggleInspector: () =>
+                              setState(() => _showInspector = !_showInspector),
+                          onToggleSearch: () =>
+                              setState(() => _showSearch = !_showSearch),
+                          onToggleCollections: () =>
+                              setState(() => _showCollections = !_showCollections),
+                          onToggleSplitEditor: _toggleSplitEditor,
+                          onSave: _saveProject,
+                          onExport: kIsWeb ? _exportProject : null,
+                          onImport: kIsWeb ? _importProject : null,
+                          onBackups: () => _openBackupManager(service),
+                          onCompile: service.currentProject != null
+                              ? () => _openCompileScreen(service.currentProject!)
+                              : null,
+                          onTargets: () => _openTargetsDialog(service),
+                          onSessionTarget: () => _startSessionTarget(service),
+                          onStatistics: () => _openStatistics(service),
+                          onTemplateManager: _openTemplateManager,
+                          onInsertTemplate: () => _insertFromTemplate(service),
+                          onCompositionMode: () => _openCompositionMode(service),
+                          onNameGenerator: _openNameGenerator,
+                          onLinguisticAnalysis: () =>
+                              _openLinguisticAnalysis(service),
+                          onKeywordManager: _openKeywordManager,
+                          onCustomFields: _openCustomFieldManager,
+                          onSwitchToMenuBar: () {
+                            setState(() => _toolbarStyle = ToolbarStyle.menuBar);
+                          },
+                        ),
                 ),
+              ),
 
               // Main content
               Expanded(
@@ -972,6 +994,26 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
 
   Future<void> _saveProject() async {
     final service = context.read<ScrivenerService>();
+    final storageService = context.read<StorageAccessService>();
+
+    final hasPermission = await storageService.ensureStoragePermission(
+      writableDirectory: service.currentProject?.path,
+    );
+    if (!mounted) return;
+    if (!hasPermission) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            storageService.error ?? 'Storage permission is required to save.',
+          ),
+          action: SnackBarAction(
+            label: 'Settings',
+            onPressed: () => storageService.openPermissionSettings(),
+          ),
+        ),
+      );
+      return;
+    }
 
     // Show loading indicator
     showDialog(

@@ -22,6 +22,7 @@ dependencies:
   path_provider: ^2.1.2
   path: ^1.8.3
   file_picker: ^10.3.8
+  permission_handler: ^12.0.1
 
   # XML parsing for Scrivener files
   xml: ^6.5.0

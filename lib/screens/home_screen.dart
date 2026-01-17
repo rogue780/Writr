@@ -483,8 +483,22 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!context.mounted) return;
 
       if (projectPath == null) {
-        // User cancelled
         Navigator.pop(context);
+        final error = storageService.error;
+        if (error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error),
+              backgroundColor: Colors.red,
+              action: SnackBarAction(
+                label: 'Settings',
+                textColor: Colors.white,
+                onPressed: () => storageService.openPermissionSettings(),
+              ),
+            ),
+          );
+          storageService.clearError();
+        }
         return;
       }
 
@@ -679,8 +693,22 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!context.mounted) return;
 
       if (directory == null) {
-        // User cancelled
         Navigator.pop(context);
+        final error = storageService.error;
+        if (error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error),
+              backgroundColor: Colors.red,
+              action: SnackBarAction(
+                label: 'Settings',
+                textColor: Colors.white,
+                onPressed: () => storageService.openPermissionSettings(),
+              ),
+            ),
+          );
+          storageService.clearError();
+        }
         return;
       }
 
