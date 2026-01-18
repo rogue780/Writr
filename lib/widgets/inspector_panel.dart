@@ -132,6 +132,16 @@ class _InspectorPanelState extends State<InspectorPanel>
       ),
       child: Row(
         children: [
+          if (widget.onClose != null) ...[
+            IconButton(
+              icon: const Icon(Icons.chevron_right, size: 20),
+              tooltip: 'Hide Inspector',
+              onPressed: widget.onClose,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+            const SizedBox(width: 8),
+          ],
           const Icon(Icons.info_outline, size: 20),
           const SizedBox(width: 8),
           Expanded(
@@ -154,13 +164,6 @@ class _InspectorPanelState extends State<InspectorPanel>
             ),
             const SizedBox(width: 12),
           ],
-          if (widget.onClose != null)
-            IconButton(
-              icon: const Icon(Icons.close, size: 20),
-              onPressed: widget.onClose,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
         ],
       ),
     );

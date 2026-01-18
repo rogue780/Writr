@@ -29,6 +29,9 @@ class CorkboardView extends StatefulWidget {
 class _CorkboardViewState extends State<CorkboardView> {
   double _cardScale = 1.0;
   final List<double> _scaleOptions = [0.75, 1.0, 1.25, 1.5];
+  static const double _baseCardWidth = 180;
+  static const double _baseCardHeight = 140;
+  static const double _cardSpacing = 20;
 
   @override
   Widget build(BuildContext context) {
@@ -145,71 +148,87 @@ class _CorkboardViewState extends State<CorkboardView> {
   }
 
   Widget _buildCardGrid(BuildContext context, List<BinderItem> children) {
-    final cardWidth = (180 * _cardScale).toInt();
-    final cardHeight = (140 * _cardScale).toInt();
+    final desiredCardWidth = _baseCardWidth * _cardScale;
+    final desiredCardHeight = _baseCardHeight * _cardScale;
+
+    Widget buildCard(
+      BinderItem item,
+      DocumentMetadata? itemMetadata, {
+      required bool isSelected,
+      VoidCallback? onTap,
+      VoidCallback? onDoubleTap,
+    }) {
+      return SizedBox(
+        width: desiredCardWidth,
+        height: desiredCardHeight,
+        child: IndexCard(
+          item: item,
+          metadata: itemMetadata,
+          isSelected: isSelected,
+          onTap: onTap,
+          onDoubleTap: onDoubleTap,
+          onSynopsisChanged: (synopsis) {
+            final existingMetadata =
+                itemMetadata ?? DocumentMetadata.empty(item.id);
+            widget.onMetadataChanged(
+              item.id,
+              existingMetadata.copyWith(
+                synopsis: synopsis,
+                modifiedAt: DateTime.now(),
+              ),
+            );
+          },
+        ),
+      );
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final crossAxisCount = (constraints.maxWidth / (cardWidth + 20)).floor();
-        final effectiveCrossAxisCount = crossAxisCount > 0 ? crossAxisCount : 1;
+        final availableWidth =
+            (constraints.maxWidth - (_cardSpacing * 2)).clamp(0.0, double.infinity);
+        final crossAxisCount = ((availableWidth + _cardSpacing) /
+                (desiredCardWidth + _cardSpacing))
+            .floor()
+            .clamp(1, 1000);
 
         return GridView.builder(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(_cardSpacing),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: effectiveCrossAxisCount,
-            childAspectRatio: cardWidth / cardHeight,
-            crossAxisSpacing: 20,
-            mainAxisSpacing: 20,
+            crossAxisCount: crossAxisCount,
+            childAspectRatio: _baseCardWidth / _baseCardHeight,
+            crossAxisSpacing: _cardSpacing,
+            mainAxisSpacing: _cardSpacing,
           ),
           itemCount: children.length,
           itemBuilder: (context, index) {
             final item = children[index];
             final itemMetadata = widget.metadata[item.id];
 
-            return Draggable<BinderItem>(
-              data: item,
-              feedback: Material(
-                elevation: 8,
-                child: Transform.scale(
-                  scale: _cardScale,
-                  child: IndexCard(
-                    item: item,
-                    metadata: itemMetadata,
+            return Center(
+              child: Draggable<BinderItem>(
+                data: item,
+                feedback: Material(
+                  elevation: 8,
+                  child: buildCard(
+                    item,
+                    itemMetadata,
                     isSelected: false,
                   ),
                 ),
-              ),
-              childWhenDragging: Opacity(
-                opacity: 0.5,
-                child: Transform.scale(
-                  scale: _cardScale,
-                  child: IndexCard(
-                    item: item,
-                    metadata: itemMetadata,
+                childWhenDragging: Opacity(
+                  opacity: 0.5,
+                  child: buildCard(
+                    item,
+                    itemMetadata,
                     isSelected: false,
                   ),
                 ),
-              ),
-              child: Transform.scale(
-                scale: _cardScale,
-                child: IndexCard(
-                  item: item,
-                  metadata: itemMetadata,
+                child: buildCard(
+                  item,
+                  itemMetadata,
                   isSelected: widget.selectedItem?.id == item.id,
                   onTap: () => widget.onItemSelected(item),
                   onDoubleTap: () => widget.onItemDoubleClicked(item),
-                  onSynopsisChanged: (synopsis) {
-                    // Update the metadata with the new synopsis
-                    final existingMetadata = itemMetadata ??
-                        DocumentMetadata.empty(item.id);
-                    widget.onMetadataChanged(
-                      item.id,
-                      existingMetadata.copyWith(
-                        synopsis: synopsis,
-                        modifiedAt: DateTime.now(),
-                      ),
-                    );
-                  },
                 ),
               ),
             );

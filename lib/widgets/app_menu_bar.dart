@@ -82,6 +82,8 @@ class AppMenuBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showViewModeToggle = MediaQuery.sizeOf(context).width >= 700;
+
     return Container(
       height: 32,
       decoration: BoxDecoration(
@@ -97,6 +99,16 @@ class AppMenuBar extends StatelessWidget {
           _buildViewMenu(context),
           _buildProjectMenu(context),
           _buildToolsMenu(context),
+          if (showViewModeToggle && onViewModeChanged != null) ...[
+            const SizedBox(width: 8),
+            Container(
+              width: 1,
+              height: 20,
+              color: Theme.of(context).dividerColor,
+            ),
+            const SizedBox(width: 8),
+            _buildViewModeToggle(context),
+          ],
           const Spacer(),
           // Switch to simplified toolbar option
           if (onSwitchToSimplifiedToolbar != null)
@@ -107,6 +119,47 @@ class AppMenuBar extends StatelessWidget {
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 visualDensity: VisualDensity.compact,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildViewModeToggle(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final mode in ViewMode.values)
+            Tooltip(
+              message: mode.tooltip,
+              child: InkWell(
+                onTap: () => onViewModeChanged?.call(mode),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: viewMode == mode
+                        ? colorScheme.primary
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(
+                    mode.icon,
+                    size: 16,
+                    color: viewMode == mode
+                        ? colorScheme.onPrimary
+                        : colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ),
             ),
         ],

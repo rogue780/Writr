@@ -8,12 +8,14 @@ class BinderTreeView extends StatelessWidget {
   final List<BinderItem> items;
   final Function(BinderItem) onItemSelected;
   final BinderItem? selectedItem;
+  final VoidCallback? onClose;
 
   const BinderTreeView({
     super.key,
     required this.items,
     required this.onItemSelected,
     this.selectedItem,
+    this.onClose,
   });
 
   @override
@@ -76,6 +78,16 @@ class BinderTreeView extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (onClose != null) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left, size: 20),
+                    tooltip: 'Hide Binder',
+                    onPressed: onClose,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
               ],
             ),
           ),

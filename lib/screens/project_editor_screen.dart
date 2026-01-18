@@ -387,8 +387,8 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                 ),
                 const SizedBox(width: 12),
                 IconButton(
-                  icon: const Icon(Icons.close, size: 20),
-                  tooltip: 'Close',
+                  icon: const Icon(Icons.chevron_left, size: 20),
+                  tooltip: 'Hide Binder',
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   onPressed: _closeOpenDrawerIfAny,
@@ -556,11 +556,17 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         Expanded(
           child: Row(
             children: [
-              if (useMobileUi && !showBinderPane)
+              if (!showBinderPane)
                 EdgePanelHandle(
                   label: 'Binder',
                   side: EdgePanelSide.left,
-                  onTap: () => _toggleBinderDrawer(context),
+                  onTap: () {
+                    if (useMobileUi) {
+                      _toggleBinderDrawer(context);
+                      return;
+                    }
+                    setState(() => _showBinder = true);
+                  },
                 ),
               // Collections panel (left side when visible)
               if (!useMobileUi && _showCollections)
@@ -652,11 +658,17 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                   child:
                       _buildInspectorPane(service, useMobileUi: useMobileUi),
                 ),
-              if (useMobileUi && !showInspectorPane)
+              if (!showInspectorPane)
                 EdgePanelHandle(
                   label: 'Inspector',
                   side: EdgePanelSide.right,
-                  onTap: () => _toggleInspectorDrawer(context),
+                  onTap: () {
+                    if (useMobileUi) {
+                      _toggleInspectorDrawer(context);
+                      return;
+                    }
+                    setState(() => _showInspector = true);
+                  },
                 ),
             ],
           ),
@@ -677,6 +689,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         _onBinderItemSelected(item);
       },
       selectedItem: _selectedItem,
+      onClose: useMobileUi ? null : () => setState(() => _showBinder = false),
     );
 
     if (!showHeader) {
@@ -725,8 +738,8 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
               ),
               const SizedBox(width: 12),
               IconButton(
-                icon: const Icon(Icons.close, size: 20),
-                tooltip: 'Close',
+                icon: const Icon(Icons.chevron_left, size: 20),
+                tooltip: 'Hide Binder',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 onPressed: () {

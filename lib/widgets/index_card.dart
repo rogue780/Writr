@@ -86,8 +86,6 @@ class _IndexCardState extends State<IndexCard> {
     return GestureDetector(
       onTap: widget.onTap,
       child: Container(
-        width: 180,
-        height: 140,
         decoration: BoxDecoration(
           color: Colors.amber[50],
           borderRadius: BorderRadius.circular(4),
