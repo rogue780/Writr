@@ -25,6 +25,9 @@ jobs:
   build-web:
     name: Build Web Version
     runs-on: ubuntu-latest
+    env:
+      DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+      ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID }}
 
     steps:
       - name: Checkout repository
@@ -43,7 +46,7 @@ jobs:
         run: flutter pub get
 
       - name: Build web
-        run: flutter build web --release --base-href /Writr/
+        run: flutter build web --release --base-href /Writr/ --dart-define=DROPBOX_APP_KEY="$DROPBOX_APP_KEY" --dart-define=ONEDRIVE_CLIENT_ID="$ONEDRIVE_CLIENT_ID"
 
       - name: Get version info
         id: version

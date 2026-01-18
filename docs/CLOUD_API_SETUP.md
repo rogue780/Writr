@@ -22,6 +22,15 @@ Writr offers two methods for accessing cloud storage:
 - Access to the respective developer console
 - Basic understanding of OAuth 2.0 (helpful but not required)
 
+## Build-Time Configuration (Local + CI)
+
+Writr reads OAuth app IDs from Flutter build-time defines:
+
+- Dropbox: `DROPBOX_APP_KEY`
+- OneDrive: `ONEDRIVE_CLIENT_ID`
+
+**GitHub Actions:** set these as repository secrets and the build workflows will pass them via `--dart-define`.
+
 ---
 
 ## Google Drive API Setup
@@ -105,36 +114,51 @@ Google Sign-In automatically discovers the credentials through your package name
 1. Go to the "Settings" tab
 2. Copy your "App key"
 
-### Step 4: Update the Code
+### Step 4: Provide the App Key at Build Time
 
-Open `lib/services/dropbox_provider.dart` and replace:
+Writr reads your Dropbox app key from a build-time define:
 
-```dart
-static const String _appKey = 'YOUR_DROPBOX_APP_KEY';
+`DROPBOX_APP_KEY`
+
+Examples:
+
+```bash
+# Run locally
+flutter run --dart-define=DROPBOX_APP_KEY=your_dropbox_app_key
+
+# Build APK
+flutter build apk --release --dart-define=DROPBOX_APP_KEY=your_dropbox_app_key
 ```
 
-with:
+You can also keep values out of your shell history with `--dart-define-from-file`:
 
-```dart
-static const String _appKey = 'your_actual_app_key_here';
+```json
+// env.json (do not commit)
+{
+  "DROPBOX_APP_KEY": "your_dropbox_app_key"
+}
+```
+
+```bash
+flutter run --dart-define-from-file=env.json
 ```
 
 ### Step 5: Configure Redirect URI
 
 1. In the Dropbox app settings, find "Redirect URIs"
-2. Add: `writr://oauth2redirect`
+2. Add: `writr://auth`
 3. Click "Add"
 
 ### Step 6: Configure Android Manifest
 
-Add to `android/app/src/main/AndroidManifest.xml` inside the `<activity>` tag:
+This repo already includes a deep link intent filter. If you changed it, ensure the `<activity>` includes:
 
 ```xml
 <intent-filter>
     <action android:name="android.intent.action.VIEW" />
     <category android:name="android.intent.category.DEFAULT" />
     <category android:name="android.intent.category.BROWSABLE" />
-    <data android:scheme="writr" android:host="oauth2redirect" />
+    <data android:scheme="writr" android:host="auth" />
 </intent-filter>
 ```
 
@@ -150,7 +174,7 @@ Add to `android/app/src/main/AndroidManifest.xml` inside the `<activity>` tag:
 4. Fill in:
    - Name: `Writr`
    - Supported account types: "Accounts in any organizational directory and personal Microsoft accounts"
-   - Redirect URI: Select "Public client/native (mobile & desktop)" and enter `writr://oauth2redirect`
+   - Redirect URI: Select "Public client/native (mobile & desktop)" and enter `writr://auth`
 5. Click "Register"
 
 ### Step 2: Configure API Permissions
@@ -169,30 +193,32 @@ Add to `android/app/src/main/AndroidManifest.xml` inside the `<activity>` tag:
 1. Go to "Overview"
 2. Copy the "Application (client) ID"
 
-### Step 4: Update the Code
+### Step 4: Provide the Client ID at Build Time
 
-Open `lib/services/onedrive_provider.dart` and replace:
+Writr reads your OneDrive client ID from a build-time define:
 
-```dart
-static const String _clientId = 'YOUR_MICROSOFT_CLIENT_ID';
+`ONEDRIVE_CLIENT_ID`
+
+Examples:
+
+```bash
+# Run locally
+flutter run --dart-define=ONEDRIVE_CLIENT_ID=your_microsoft_client_id
+
+# Build APK
+flutter build apk --release --dart-define=ONEDRIVE_CLIENT_ID=your_microsoft_client_id
 ```
 
-with:
+### Step 5: Configure Android Manifest (If Needed)
 
-```dart
-static const String _clientId = 'your_actual_client_id_here';
-```
-
-### Step 5: Configure Android Manifest
-
-Add to `android/app/src/main/AndroidManifest.xml` inside the `<activity>` tag (if not already added for Dropbox):
+This repo already includes a deep link intent filter. If you changed it, ensure the `<activity>` includes:
 
 ```xml
 <intent-filter>
     <action android:name="android.intent.action.VIEW" />
     <category android:name="android.intent.category.DEFAULT" />
     <category android:name="android.intent.category.BROWSABLE" />
-    <data android:scheme="writr" android:host="oauth2redirect" />
+    <data android:scheme="writr" android:host="auth" />
 </intent-filter>
 ```
 
@@ -244,7 +270,7 @@ Add to `android/app/src/main/AndroidManifest.xml` inside the `<activity>` tag (i
 
 ### OneDrive: "AADSTS50011: The redirect URI specified in the request does not match"
 
-- Verify the redirect URI in Azure Portal is exactly `writr://oauth2redirect`
+- Verify the redirect URI in Azure Portal is exactly `writr://auth`
 - Check that the intent filter in AndroidManifest.xml matches
 - Make sure the scheme is lowercase
 

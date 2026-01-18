@@ -24,6 +24,7 @@ import '../widgets/search_panel.dart';
 import '../widgets/collection_list.dart';
 import '../widgets/app_menu_bar.dart';
 import '../widgets/simplified_toolbar.dart';
+import '../widgets/edge_panel_handle.dart';
 import '../utils/web_download.dart';
 import '../services/statistics_service.dart';
 import '../services/target_service.dart';
@@ -51,6 +52,8 @@ class ProjectEditorScreen extends StatefulWidget {
 }
 
 class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
   BinderItem? _selectedItem;
   BinderItem? _selectedFolder; // For folder-based views
   bool _showBinder = true;
@@ -60,17 +63,13 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
   ViewMode _viewMode = ViewMode.editor;
   SplitEditorState _splitEditorState = const SplitEditorState();
 
-  // Resizable panel widths
-  double _binderWidth = 250;
-  double _inspectorWidth = 300;
+  // Mobile pin state (phone UI uses drawers by default).
+  bool _pinBinderOnMobile = false;
+  bool _pinInspectorOnMobile = false;
+
+  // Resizable panel widths (persisted via PreferencesService)
   static const double _minPanelWidth = 150;
   static const double _maxPanelWidth = 500;
-
-  // Page view mode for editor
-  bool _pageViewMode = false;
-
-  // Toolbar style
-  ToolbarStyle _toolbarStyle = ToolbarStyle.simplified;
 
   // Services for search and collections
   final SearchService _searchService = SearchService();
@@ -85,15 +84,18 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ScrivenerService>(
-      builder: (context, service, child) {
+    return Consumer2<ScrivenerService, PreferencesService>(
+      builder: (context, service, prefs, child) {
         final projectName = service.currentProject?.name ?? 'Project';
         final hasUnsavedChanges = service.hasUnsavedChanges;
+        final hasProject = service.currentProject != null;
+        final useMobileUi = _useMobileUi(context);
+        final toolbarStyle = prefs.toolbarStyle;
 
         // Calculate target progress
         double? targetProgress;
         final dailyTarget = _targetService.dailyTarget;
-        if (dailyTarget != null && service.currentProject != null) {
+        if (dailyTarget != null && hasProject) {
           final progress = _targetService.getTargetProgress(
             dailyTarget,
             service.currentProject!,
@@ -104,21 +106,29 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         final colorScheme = Theme.of(context).colorScheme;
 
         return Scaffold(
+          key: _scaffoldKey,
+          drawer: useMobileUi && hasProject && !_pinBinderOnMobile
+              ? Drawer(child: _buildMobileBinderDrawer(service))
+              : null,
+          endDrawer: useMobileUi && hasProject && !_pinInspectorOnMobile
+              ? Drawer(child: _buildMobileInspectorDrawer(service))
+              : null,
           body: Column(
             children: [
               // Toolbar - either menu bar or simplified
               ColoredBox(
-                color: _toolbarStyle == ToolbarStyle.menuBar
+                color: toolbarStyle == ToolbarStyle.menuBar
                     ? colorScheme.surfaceContainerHighest
                     : colorScheme.surface,
                 child: SafeArea(
                   bottom: false,
-                  child: _toolbarStyle == ToolbarStyle.menuBar
+                  child: toolbarStyle == ToolbarStyle.menuBar
                       ? AppMenuBar(
-                          showBinder: _showBinder,
-                          showInspector: _showInspector,
+                          showBinder: useMobileUi ? _pinBinderOnMobile : _showBinder,
+                          showInspector:
+                              useMobileUi ? _pinInspectorOnMobile : _showInspector,
                           showSearch: _showSearch,
-                          showCollections: _showCollections,
+                          showCollections: useMobileUi ? false : _showCollections,
                           viewMode: _viewMode,
                           splitEditorEnabled: _splitEditorState.isSplitEnabled,
                           onSave: _saveProject,
@@ -126,17 +136,45 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                           onImport: kIsWeb ? _importProject : null,
                           onBackups: () => _openBackupManager(service),
                           onClose: () => Navigator.pop(context),
-                          onToggleBinder: () =>
-                              setState(() => _showBinder = !_showBinder),
-                          onToggleInspector: () =>
-                              setState(() => _showInspector = !_showInspector),
+                          onToggleBinder: () {
+                            if (useMobileUi) {
+                              if (!hasProject) {
+                                return;
+                              }
+                              if (_pinBinderOnMobile) {
+                                setState(() => _pinBinderOnMobile = false);
+                                return;
+                              }
+                              _toggleBinderDrawer(context);
+                              return;
+                            }
+                            setState(() => _showBinder = !_showBinder);
+                          },
+                          onToggleInspector: () {
+                            if (useMobileUi) {
+                              if (!hasProject) {
+                                return;
+                              }
+                              if (_pinInspectorOnMobile) {
+                                setState(() => _pinInspectorOnMobile = false);
+                                return;
+                              }
+                              _toggleInspectorDrawer(context);
+                              return;
+                            }
+                            setState(() => _showInspector = !_showInspector);
+                          },
                           onToggleSearch: () =>
                               setState(() => _showSearch = !_showSearch),
-                          onToggleCollections: () =>
-                              setState(() => _showCollections = !_showCollections),
+                          onToggleCollections: useMobileUi
+                              ? null
+                              : () => setState(
+                                    () => _showCollections = !_showCollections,
+                                  ),
                           onViewModeChanged: (mode) =>
                               setState(() => _viewMode = mode),
-                          onToggleSplitEditor: _toggleSplitEditor,
+                          onToggleSplitEditor:
+                              useMobileUi ? null : _toggleSplitEditor,
                           onCompile: service.currentProject != null
                               ? () => _openCompileScreen(service.currentProject!)
                               : null,
@@ -152,30 +190,59 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                           onKeywordManager: _openKeywordManager,
                           onCustomFields: _openCustomFieldManager,
                           onSwitchToSimplifiedToolbar: () {
-                            setState(() => _toolbarStyle = ToolbarStyle.simplified);
+                            prefs.setToolbarStyle(ToolbarStyle.simplified);
                           },
                         )
                       : SimplifiedToolbar(
                           projectName: projectName,
                           hasUnsavedChanges: hasUnsavedChanges,
                           viewMode: _viewMode,
-                          showBinder: _showBinder,
-                          showInspector: _showInspector,
+                          showBinder: useMobileUi ? _pinBinderOnMobile : _showBinder,
+                          showInspector:
+                              useMobileUi ? _pinInspectorOnMobile : _showInspector,
                           showSearch: _showSearch,
-                          showCollections: _showCollections,
+                          showCollections: useMobileUi ? false : _showCollections,
                           splitEditorEnabled: _splitEditorState.isSplitEnabled,
                           targetProgress: targetProgress,
                           onViewModeChanged: (mode) =>
                               setState(() => _viewMode = mode),
-                          onToggleBinder: () =>
-                              setState(() => _showBinder = !_showBinder),
-                          onToggleInspector: () =>
-                              setState(() => _showInspector = !_showInspector),
+                          onToggleBinder: () {
+                            if (useMobileUi) {
+                              if (!hasProject) {
+                                return;
+                              }
+                              if (_pinBinderOnMobile) {
+                                setState(() => _pinBinderOnMobile = false);
+                                return;
+                              }
+                              _toggleBinderDrawer(context);
+                              return;
+                            }
+                            setState(() => _showBinder = !_showBinder);
+                          },
+                          onToggleInspector: () {
+                            if (useMobileUi) {
+                              if (!hasProject) {
+                                return;
+                              }
+                              if (_pinInspectorOnMobile) {
+                                setState(() => _pinInspectorOnMobile = false);
+                                return;
+                              }
+                              _toggleInspectorDrawer(context);
+                              return;
+                            }
+                            setState(() => _showInspector = !_showInspector);
+                          },
                           onToggleSearch: () =>
                               setState(() => _showSearch = !_showSearch),
-                          onToggleCollections: () =>
-                              setState(() => _showCollections = !_showCollections),
-                          onToggleSplitEditor: _toggleSplitEditor,
+                          onToggleCollections: useMobileUi
+                              ? null
+                              : () => setState(
+                                    () => _showCollections = !_showCollections,
+                                  ),
+                          onToggleSplitEditor:
+                              useMobileUi ? null : _toggleSplitEditor,
                           onSave: _saveProject,
                           onExport: kIsWeb ? _exportProject : null,
                           onImport: kIsWeb ? _importProject : null,
@@ -195,7 +262,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                           onKeywordManager: _openKeywordManager,
                           onCustomFields: _openCustomFieldManager,
                           onSwitchToMenuBar: () {
-                            setState(() => _toolbarStyle = ToolbarStyle.menuBar);
+                            prefs.setToolbarStyle(ToolbarStyle.menuBar);
                           },
                         ),
                 ),
@@ -203,13 +270,231 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
 
               // Main content
               Expanded(
-                child: _buildBody(service),
+                child: _buildBody(service, prefs),
               ),
             ],
           ),
         );
       },
     );
+  }
+
+  bool _useMobileUi(BuildContext context) {
+    if (kIsWeb) {
+      return false;
+    }
+
+    final platform = Theme.of(context).platform;
+    final isMobilePlatform =
+        platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+    if (!isMobilePlatform) {
+      return false;
+    }
+
+    // Treat phones as "compact"; keep side-by-side panes for tablets.
+    return MediaQuery.sizeOf(context).shortestSide < 600;
+  }
+
+  void _toggleBinderDrawer(BuildContext context) {
+    final scaffoldState = _scaffoldKey.currentState;
+    if (scaffoldState == null) {
+      return;
+    }
+
+    if (scaffoldState.isEndDrawerOpen) {
+      Navigator.of(context).pop();
+    }
+
+    if (scaffoldState.isDrawerOpen) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    scaffoldState.openDrawer();
+  }
+
+  void _toggleInspectorDrawer(BuildContext context) {
+    final scaffoldState = _scaffoldKey.currentState;
+    if (scaffoldState == null) {
+      return;
+    }
+
+    if (scaffoldState.isDrawerOpen) {
+      Navigator.of(context).pop();
+    }
+
+    if (scaffoldState.isEndDrawerOpen) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    scaffoldState.openEndDrawer();
+  }
+
+  void _closeOpenDrawerIfAny() {
+    final scaffoldState = _scaffoldKey.currentState;
+    if (scaffoldState == null) {
+      return;
+    }
+
+    if (scaffoldState.isDrawerOpen || scaffoldState.isEndDrawerOpen) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Widget _buildMobileBinderDrawer(ScrivenerService service) {
+    return SafeArea(
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              border: Border(
+                bottom: BorderSide(color: Theme.of(context).dividerColor),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.folder_open, size: 20),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Binder',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    _pinBinderOnMobile
+                        ? Icons.push_pin
+                        : Icons.push_pin_outlined,
+                    size: 20,
+                  ),
+                  tooltip: _pinBinderOnMobile ? 'Unpin' : 'Pin',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () {
+                    setState(() {
+                      _pinBinderOnMobile = !_pinBinderOnMobile;
+                      if (_pinBinderOnMobile) {
+                        _pinInspectorOnMobile = false;
+                      }
+                    });
+                    _closeOpenDrawerIfAny();
+                  },
+                ),
+                const SizedBox(width: 12),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  tooltip: 'Close',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: _closeOpenDrawerIfAny,
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: BinderTreeView(
+              items: service.currentProject!.binderItems,
+              onItemSelected: (item) {
+                _onBinderItemSelected(item);
+                _closeOpenDrawerIfAny();
+              },
+              selectedItem: _selectedItem,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileInspectorDrawer(ScrivenerService service) {
+    return SafeArea(
+      child: InspectorPanel(
+        selectedItem: _selectedItem,
+        metadata: _selectedItem != null
+            ? service.getDocumentMetadata(_selectedItem!.id)
+            : null,
+        content: _selectedItem != null
+            ? service.currentProject!.textContents[_selectedItem!.id]
+            : null,
+        snapshots: _selectedItem != null
+            ? service.getDocumentSnapshots(_selectedItem!.id)
+            : [],
+        onMetadataChanged: (metadata) {
+          if (_selectedItem != null) {
+            service.updateDocumentMetadata(
+              _selectedItem!.id,
+              metadata,
+            );
+          }
+        },
+        onCreateSnapshot: _selectedItem != null
+            ? () {
+                service.createSnapshot(
+                  _selectedItem!.id,
+                  _selectedItem!.title,
+                );
+              }
+            : null,
+        onRestoreSnapshot: _selectedItem != null
+            ? (snapshot) {
+                service.restoreFromSnapshot(
+                  _selectedItem!.id,
+                  snapshot,
+                );
+              }
+            : null,
+        onDeleteSnapshot: _selectedItem != null
+            ? (snapshot) {
+                service.deleteSnapshot(
+                  _selectedItem!.id,
+                  snapshot.id,
+                );
+              }
+            : null,
+        isPinned: _pinInspectorOnMobile,
+        onTogglePinned: () {
+          setState(() {
+            _pinInspectorOnMobile = !_pinInspectorOnMobile;
+            if (_pinInspectorOnMobile) {
+              _pinBinderOnMobile = false;
+            }
+          });
+          _closeOpenDrawerIfAny();
+        },
+        onClose: _closeOpenDrawerIfAny,
+      ),
+    );
+  }
+
+  void _onBinderItemSelected(BinderItem item) {
+    setState(() {
+      _selectedItem = item;
+
+      if (item.isFolder) {
+        _selectedFolder = item;
+      }
+
+      if (_splitEditorState.isSplitEnabled && !item.isFolder) {
+        if (_splitEditorState.primaryPane.isFocused) {
+          _splitEditorState = _splitEditorState.copyWith(
+            primaryPane: _splitEditorState.primaryPane.copyWith(
+              document: item,
+            ),
+          );
+        } else {
+          _splitEditorState = _splitEditorState.copyWith(
+            secondaryPane: _splitEditorState.secondaryPane.copyWith(
+              document: item,
+            ),
+          );
+        }
+      }
+    });
   }
 
   void _toggleSplitEditor() {
@@ -231,12 +516,16 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
     });
   }
 
-  Widget _buildBody(ScrivenerService service) {
+  Widget _buildBody(ScrivenerService service, PreferencesService prefs) {
     if (service.currentProject == null) {
       return const Center(
         child: Text('No project loaded'),
       );
     }
+
+    final useMobileUi = _useMobileUi(context);
+    final showBinderPane = useMobileUi ? _pinBinderOnMobile : _showBinder;
+    final showInspectorPane = useMobileUi ? _pinInspectorOnMobile : _showInspector;
 
     return Column(
       children: [
@@ -267,8 +556,14 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         Expanded(
           child: Row(
             children: [
+              if (useMobileUi && !showBinderPane)
+                EdgePanelHandle(
+                  label: 'Binder',
+                  side: EdgePanelSide.left,
+                  onTap: () => _toggleBinderDrawer(context),
+                ),
               // Collections panel (left side when visible)
-              if (_showCollections)
+              if (!useMobileUi && _showCollections)
                 SizedBox(
                   width: 220,
                   child: CollectionList(
@@ -278,51 +573,31 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                     },
                   ),
                 ),
-              if (_showCollections) const VerticalDivider(width: 1),
+              if (!useMobileUi && _showCollections)
+                const VerticalDivider(width: 1),
               // Binder
-              if (_showBinder)
+              if (showBinderPane)
                 SizedBox(
-                  width: _binderWidth,
-                  child: BinderTreeView(
-                    items: service.currentProject!.binderItems,
-                    onItemSelected: (item) {
-                      setState(() {
-                        _selectedItem = item;
-                        // If selecting a folder, also set it as the folder for views
-                        if (item.isFolder) {
-                          _selectedFolder = item;
-                        }
-                        // If split editor is enabled, load document into focused pane
-                        if (_splitEditorState.isSplitEnabled && !item.isFolder) {
-                          if (_splitEditorState.primaryPane.isFocused) {
-                            _splitEditorState = _splitEditorState.copyWith(
-                              primaryPane: _splitEditorState.primaryPane.copyWith(
-                                document: item,
-                              ),
-                            );
-                          } else {
-                            _splitEditorState = _splitEditorState.copyWith(
-                              secondaryPane: _splitEditorState.secondaryPane.copyWith(
-                                document: item,
-                              ),
-                            );
-                          }
-                        }
-                      });
-                    },
-                    selectedItem: _selectedItem,
-                  ),
+                  width: prefs.binderWidth,
+                  child: _buildBinderPane(service, useMobileUi: useMobileUi),
                 ),
               // Binder resize handle
-              if (_showBinder)
+              if (showBinderPane)
                 MouseRegion(
                   cursor: SystemMouseCursors.resizeColumn,
                   child: GestureDetector(
                     onHorizontalDragUpdate: (details) {
+                      final nextWidth =
+                          (prefs.binderWidth + details.delta.dx).clamp(
+                        _minPanelWidth,
+                        _maxPanelWidth,
+                      );
                       setState(() {
-                        _binderWidth = (_binderWidth + details.delta.dx)
-                            .clamp(_minPanelWidth, _maxPanelWidth);
+                        prefs.setBinderWidth(nextWidth, persist: false);
                       });
+                    },
+                    onHorizontalDragEnd: (_) {
+                      prefs.setBinderWidth(prefs.binderWidth);
                     },
                     child: Container(
                       width: 8,
@@ -340,16 +615,23 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                 child: _buildMainContent(service),
               ),
               // Inspector resize handle
-              if (_showInspector)
+              if (showInspectorPane)
                 MouseRegion(
                   cursor: SystemMouseCursors.resizeColumn,
                   child: GestureDetector(
                     onHorizontalDragUpdate: (details) {
+                      final nextWidth =
+                          (prefs.inspectorWidth - details.delta.dx).clamp(
+                        _minPanelWidth,
+                        _maxPanelWidth,
+                      );
                       setState(() {
                         // Drag left increases width, drag right decreases
-                        _inspectorWidth = (_inspectorWidth - details.delta.dx)
-                            .clamp(_minPanelWidth, _maxPanelWidth);
+                        prefs.setInspectorWidth(nextWidth, persist: false);
                       });
+                    },
+                    onHorizontalDragEnd: (_) {
+                      prefs.setInspectorWidth(prefs.inspectorWidth);
                     },
                     child: Container(
                       width: 8,
@@ -364,63 +646,170 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                   ),
                 ),
               // Inspector Panel
-              if (_showInspector)
+              if (showInspectorPane)
                 SizedBox(
-                  width: _inspectorWidth,
-                  child: InspectorPanel(
-                    selectedItem: _selectedItem,
-                    metadata: _selectedItem != null
-                        ? service.getDocumentMetadata(_selectedItem!.id)
-                        : null,
-                    content: _selectedItem != null
-                        ? service.currentProject!.textContents[_selectedItem!.id]
-                        : null,
-                    snapshots: _selectedItem != null
-                        ? service.getDocumentSnapshots(_selectedItem!.id)
-                        : [],
-                    onMetadataChanged: (metadata) {
-                      if (_selectedItem != null) {
-                        service.updateDocumentMetadata(
-                          _selectedItem!.id,
-                          metadata,
-                        );
-                      }
-                    },
-                    onCreateSnapshot: _selectedItem != null
-                        ? () {
-                            service.createSnapshot(
-                              _selectedItem!.id,
-                              _selectedItem!.title,
-                            );
-                          }
-                        : null,
-                    onRestoreSnapshot: _selectedItem != null
-                        ? (snapshot) {
-                            service.restoreFromSnapshot(
-                              _selectedItem!.id,
-                              snapshot,
-                            );
-                          }
-                        : null,
-                    onDeleteSnapshot: _selectedItem != null
-                        ? (snapshot) {
-                            service.deleteSnapshot(
-                              _selectedItem!.id,
-                              snapshot.id,
-                            );
-                          }
-                        : null,
-                    onClose: () {
-                      setState(() {
-                        _showInspector = false;
-                      });
-                    },
-                  ),
+                  width: prefs.inspectorWidth,
+                  child:
+                      _buildInspectorPane(service, useMobileUi: useMobileUi),
+                ),
+              if (useMobileUi && !showInspectorPane)
+                EdgePanelHandle(
+                  label: 'Inspector',
+                  side: EdgePanelSide.right,
+                  onTap: () => _toggleInspectorDrawer(context),
                 ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBinderPane(
+    ScrivenerService service, {
+    required bool useMobileUi,
+  }) {
+    final showHeader = useMobileUi;
+
+    final binderTree = BinderTreeView(
+      items: service.currentProject!.binderItems,
+      onItemSelected: (item) {
+        _onBinderItemSelected(item);
+      },
+      selectedItem: _selectedItem,
+    );
+
+    if (!showHeader) {
+      return binderTree;
+    }
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            border: Border(
+              bottom: BorderSide(color: Theme.of(context).dividerColor),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.folder_open, size: 20),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Binder',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  _pinBinderOnMobile
+                      ? Icons.push_pin
+                      : Icons.push_pin_outlined,
+                  size: 20,
+                ),
+                tooltip: _pinBinderOnMobile ? 'Unpin' : 'Pin',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () {
+                  setState(() {
+                    _pinBinderOnMobile = !_pinBinderOnMobile;
+                    if (_pinBinderOnMobile) {
+                      _pinInspectorOnMobile = false;
+                    }
+                  });
+                },
+              ),
+              const SizedBox(width: 12),
+              IconButton(
+                icon: const Icon(Icons.close, size: 20),
+                tooltip: 'Close',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () {
+                  setState(() {
+                    _pinBinderOnMobile = false;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: binderTree),
+      ],
+    );
+  }
+
+  Widget _buildInspectorPane(
+    ScrivenerService service, {
+    required bool useMobileUi,
+  }) {
+    return InspectorPanel(
+      selectedItem: _selectedItem,
+      metadata: _selectedItem != null
+          ? service.getDocumentMetadata(_selectedItem!.id)
+          : null,
+      content: _selectedItem != null
+          ? service.currentProject!.textContents[_selectedItem!.id]
+          : null,
+      snapshots: _selectedItem != null
+          ? service.getDocumentSnapshots(_selectedItem!.id)
+          : [],
+      onMetadataChanged: (metadata) {
+        if (_selectedItem != null) {
+          service.updateDocumentMetadata(
+            _selectedItem!.id,
+            metadata,
+          );
+        }
+      },
+      onCreateSnapshot: _selectedItem != null
+          ? () {
+              service.createSnapshot(
+                _selectedItem!.id,
+                _selectedItem!.title,
+              );
+            }
+          : null,
+      onRestoreSnapshot: _selectedItem != null
+          ? (snapshot) {
+              service.restoreFromSnapshot(
+                _selectedItem!.id,
+                snapshot,
+              );
+            }
+          : null,
+      onDeleteSnapshot: _selectedItem != null
+          ? (snapshot) {
+              service.deleteSnapshot(
+                _selectedItem!.id,
+                snapshot.id,
+              );
+            }
+          : null,
+      isPinned: useMobileUi ? _pinInspectorOnMobile : false,
+      onTogglePinned: useMobileUi
+          ? () {
+              setState(() {
+                _pinInspectorOnMobile = !_pinInspectorOnMobile;
+                if (_pinInspectorOnMobile) {
+                  _pinBinderOnMobile = false;
+                }
+              });
+            }
+          : null,
+      onClose: () {
+        setState(() {
+          if (useMobileUi) {
+            _pinInspectorOnMobile = false;
+          } else {
+            _showInspector = false;
+          }
+        });
+      },
     );
   }
 
@@ -513,11 +902,9 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
       item: _selectedItem!,
       content: content,
       comments: comments,
-      pageViewMode: _pageViewMode,
+      pageViewMode: context.watch<PreferencesService>().pageViewMode,
       onPageViewModeChanged: (enabled) {
-        setState(() {
-          _pageViewMode = enabled;
-        });
+        context.read<PreferencesService>().setPageViewMode(enabled);
       },
       onContentChanged: (content) {
         service.updateTextContent(

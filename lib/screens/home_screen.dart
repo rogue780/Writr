@@ -336,10 +336,19 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.pop(context);
 
     if (!success) {
+      final providerName = switch (provider) {
+        CloudProvider.googleDrive => 'Google Drive',
+        CloudProvider.dropbox => 'Dropbox',
+        CloudProvider.oneDrive => 'OneDrive',
+      };
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              'Failed to sign in to ${cloudService.currentProvider?.providerName ?? "cloud provider"}'),
+            cloudService.error?.isNotEmpty == true
+                ? cloudService.error!
+                : 'Failed to sign in to $providerName',
+          ),
           backgroundColor: Colors.red,
         ),
       );

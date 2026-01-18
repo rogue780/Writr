@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:super_editor/super_editor.dart';
 import '../models/comment.dart';
@@ -50,10 +51,13 @@ class _RichTextEditorState extends State<RichTextEditor> {
   late ScrollController _scrollController;
   final _documentLayoutKey = GlobalKey();
   late final List<SingleColumnLayoutStylePhase> _customStylePhases;
+  late final SuperEditorAndroidControlsController _androidControlsController;
+  late final SuperEditorIosControlsController _iosControlsController;
 
   bool _hasUnsavedChanges = false;
   bool _isInitializing = true;
   String? _selectedCommentId;
+  late bool _showCommentMargin;
 
   // Page view settings
   static const double _pageMaxWidth = 800.0;
@@ -64,7 +68,14 @@ class _RichTextEditorState extends State<RichTextEditor> {
     super.initState();
     _focusNode = FocusNode();
     _scrollController = ScrollController();
+    _androidControlsController = SuperEditorAndroidControlsController(
+      toolbarBuilder: _buildAndroidSelectionToolbar,
+    );
+    _iosControlsController = SuperEditorIosControlsController(
+      toolbarBuilder: _buildIosSelectionToolbar,
+    );
     _customStylePhases = [ClampInvalidTextSelectionStylePhase()];
+    _showCommentMargin = widget.showCommentMargin;
     _initializeEditor();
   }
 
@@ -126,6 +137,10 @@ class _RichTextEditorState extends State<RichTextEditor> {
         _hasUnsavedChanges = false;
       });
     }
+
+    if (oldWidget.showCommentMargin != widget.showCommentMargin) {
+      _showCommentMargin = widget.showCommentMargin;
+    }
   }
 
   @override
@@ -133,6 +148,8 @@ class _RichTextEditorState extends State<RichTextEditor> {
     _document.removeListener(_onDocumentChangeLog);
     _document.dispose();
     _composer.dispose();
+    _androidControlsController.dispose();
+    _iosControlsController.dispose();
     _focusNode.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -153,6 +170,9 @@ class _RichTextEditorState extends State<RichTextEditor> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isCompact = _isCompactLayout(context);
+    final showSideComments =
+        !isCompact && _showCommentMargin && widget.comments.isNotEmpty;
 
     return Container(
       color: colorScheme.surface,
@@ -167,7 +187,7 @@ class _RichTextEditorState extends State<RichTextEditor> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(child: _buildEditor(context)),
-                      if (widget.showCommentMargin && widget.comments.isNotEmpty)
+                      if (showSideComments)
                         _buildCommentMargin(context),
                     ],
                   )
@@ -290,9 +310,201 @@ class _RichTextEditorState extends State<RichTextEditor> {
                 tooltip: 'Add Comment',
               ),
             ),
+          // Comments panel toggle
+          if (widget.comments.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: _buildCommentsButton(context),
+            ),
         ],
       ),
     );
+  }
+
+  bool _isCompactLayout(BuildContext context) {
+    return MediaQuery.sizeOf(context).shortestSide < 600;
+  }
+
+  Widget _buildCommentsButton(BuildContext context) {
+    final isCompact = _isCompactLayout(context);
+    final isVisible = !isCompact && _showCommentMargin;
+    final count = widget.comments.length;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          icon: Icon(
+            isVisible ? Icons.comment : Icons.comment_outlined,
+            size: 20,
+          ),
+          tooltip: isCompact
+              ? 'Comments'
+              : (isVisible ? 'Hide Comments' : 'Show Comments'),
+          onPressed: _toggleComments,
+          color: isVisible ? Theme.of(context).colorScheme.primary : null,
+        ),
+        if (count > 0)
+          Positioned(
+            right: 6,
+            top: 6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _toggleComments() {
+    if (widget.comments.isEmpty) {
+      return;
+    }
+
+    if (_isCompactLayout(context)) {
+      _showCommentsBottomSheet();
+      return;
+    }
+
+    setState(() {
+      _showCommentMargin = !_showCommentMargin;
+    });
+  }
+
+  Future<void> _showCommentsBottomSheet() async {
+    if (widget.comments.isEmpty) {
+      return;
+    }
+
+    var sheetOpen = true;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+
+        return StatefulBuilder(
+          builder: (sheetContext, sheetSetState) {
+            final sortedComments = [...widget.comments]
+              ..sort((a, b) => a.startOffset.compareTo(b.startOffset));
+
+            void refreshAfterFrame() {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted || !sheetOpen) return;
+                sheetSetState(() {});
+              });
+            }
+
+            return AnimatedPadding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              child: SafeArea(
+                child: SizedBox(
+                  height: MediaQuery.sizeOf(sheetContext).height * 0.75,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Theme.of(sheetContext).dividerColor,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.comment, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Comments (${widget.comments.length})',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              tooltip: 'Close',
+                              onPressed: () => Navigator.of(sheetContext).pop(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(8),
+                          itemCount: sortedComments.length,
+                          itemBuilder: (context, index) {
+                            final comment = sortedComments[index];
+                            return CommentBubble(
+                              comment: comment,
+                              isSelected: comment.id == _selectedCommentId,
+                              onTap: () {
+                                setState(() {
+                                  _selectedCommentId = comment.id;
+                                });
+                                Navigator.of(sheetContext).pop();
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  if (!mounted) return;
+                                  _navigateToComment(comment);
+                                });
+                              },
+                              onResolve: widget.onResolveComment != null
+                                  ? () {
+                                      widget.onResolveComment!(
+                                        comment.id,
+                                        !comment.isResolved,
+                                      );
+                                      refreshAfterFrame();
+                                    }
+                                  : null,
+                              onDelete: widget.onDeleteComment != null
+                                  ? () {
+                                      widget.onDeleteComment!(comment.id);
+                                      refreshAfterFrame();
+                                    }
+                                  : null,
+                              onReply: widget.onReplyToComment != null
+                                  ? (text) {
+                                      widget.onReplyToComment!(comment.id, text);
+                                      refreshAfterFrame();
+                                    }
+                                  : null,
+                              onEdit: widget.onEditComment != null
+                                  ? (text) {
+                                      widget.onEditComment!(comment.id, text);
+                                      refreshAfterFrame();
+                                    }
+                                  : null,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    sheetOpen = false;
   }
 
   void _toggleAttributions(Set<Attribution> attributions) {
@@ -333,6 +545,17 @@ class _RichTextEditorState extends State<RichTextEditor> {
             commentText,
             colorValue,
           );
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            if (_isCompactLayout(this.context)) {
+              _showCommentsBottomSheet();
+              return;
+            }
+            setState(() {
+              _showCommentMargin = true;
+            });
+          });
         },
       ),
     );
@@ -344,14 +567,20 @@ class _RichTextEditorState extends State<RichTextEditor> {
 
     final editor = Stack(
       children: [
-        SuperEditor(
-          editor: _editor,
-          focusNode: _focusNode,
-          autofocus: true,
-          scrollController: _scrollController,
-          documentLayoutKey: _documentLayoutKey,
-          stylesheet: stylesheet,
-          customStylePhases: _customStylePhases,
+        SuperEditorAndroidControlsScope(
+          controller: _androidControlsController,
+          child: SuperEditorIosControlsScope(
+            controller: _iosControlsController,
+            child: SuperEditor(
+              editor: _editor,
+              focusNode: _focusNode,
+              autofocus: true,
+              scrollController: _scrollController,
+              documentLayoutKey: _documentLayoutKey,
+              stylesheet: stylesheet,
+              customStylePhases: _customStylePhases,
+            ),
+          ),
         ),
         if (_document.toPlainText().trim().isEmpty)
           Positioned(
@@ -538,6 +767,16 @@ class _RichTextEditorState extends State<RichTextEditor> {
                     fontSize: 13,
                   ),
                 ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  tooltip: 'Hide Comments',
+                  onPressed: () {
+                    setState(() {
+                      _showCommentMargin = false;
+                    });
+                  },
+                ),
               ],
             ),
           ),
@@ -643,4 +882,184 @@ class _RichTextEditorState extends State<RichTextEditor> {
       nodePosition: TextNodePosition(offset: lastTextNode.text.length),
     );
   }
+
+  CommonEditorOperations _createCommonEditorOperations() {
+    return CommonEditorOperations(
+      document: _document,
+      editor: _editor,
+      composer: _composer,
+      documentLayoutResolver: () => _documentLayoutKey.currentState as DocumentLayout,
+    );
+  }
+
+  Widget _buildAndroidSelectionToolbar(
+    BuildContext context,
+    Key mobileToolbarKey,
+    Object focalPoint,
+  ) {
+    if (kIsWeb) {
+      // On web, we defer to the browser's internal overlay controls for mobile.
+      return const SizedBox();
+    }
+
+    return _MobileSelectionToolbar(
+      key: mobileToolbarKey,
+      selectionNotifier: _composer.selectionNotifier,
+      onCut: () {
+        _createCommonEditorOperations().cut();
+        _androidControlsController.hideToolbar();
+      },
+      onCopy: () {
+        _createCommonEditorOperations().copy();
+        _androidControlsController.hideToolbar();
+      },
+      onPaste: () {
+        _createCommonEditorOperations().paste();
+        _androidControlsController.hideToolbar();
+      },
+      onSelectAll: () {
+        _createCommonEditorOperations().selectAll();
+      },
+      onAddComment: widget.onAddComment == null
+          ? null
+          : () {
+              _androidControlsController.hideToolbar();
+              _showAddCommentDialog();
+            },
+    );
+  }
+
+  Widget _buildIosSelectionToolbar(
+    BuildContext context,
+    Key mobileToolbarKey,
+    Object focalPoint,
+  ) {
+    if (kIsWeb) {
+      // On web, we defer to the browser's internal overlay controls for mobile.
+      return const SizedBox();
+    }
+
+    return _MobileSelectionToolbar(
+      key: mobileToolbarKey,
+      selectionNotifier: _composer.selectionNotifier,
+      onCut: () {
+        _createCommonEditorOperations().cut();
+        _iosControlsController.hideToolbar();
+      },
+      onCopy: () {
+        _createCommonEditorOperations().copy();
+        _iosControlsController.hideToolbar();
+      },
+      onPaste: () {
+        _createCommonEditorOperations().paste();
+        _iosControlsController.hideToolbar();
+      },
+      onSelectAll: () {
+        _createCommonEditorOperations().selectAll();
+      },
+      onAddComment: widget.onAddComment == null
+          ? null
+          : () {
+              _iosControlsController.hideToolbar();
+              _showAddCommentDialog();
+            },
+    );
+  }
+}
+
+class _MobileSelectionToolbar extends StatelessWidget {
+  const _MobileSelectionToolbar({
+    super.key,
+    required this.selectionNotifier,
+    required this.onCut,
+    required this.onCopy,
+    required this.onPaste,
+    required this.onSelectAll,
+    this.onAddComment,
+  });
+
+  final ValueListenable<DocumentSelection?> selectionNotifier;
+  final VoidCallback onCut;
+  final VoidCallback onCopy;
+  final VoidCallback onPaste;
+  final VoidCallback onSelectAll;
+  final VoidCallback? onAddComment;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ValueListenableBuilder(
+      valueListenable: selectionNotifier,
+      builder: (context, selection, child) {
+        final hasExpandedSelection = selection != null && !selection.isCollapsed;
+
+        final actions = <_MobileSelectionToolbarAction>[
+          if (hasExpandedSelection)
+            _MobileSelectionToolbarAction(
+              label: 'Cut',
+              onPressed: onCut,
+            ),
+          if (hasExpandedSelection)
+            _MobileSelectionToolbarAction(
+              label: 'Copy',
+              onPressed: onCopy,
+            ),
+          if (hasExpandedSelection && onAddComment != null)
+            _MobileSelectionToolbarAction(
+              label: 'Comment',
+              onPressed: onAddComment!,
+            ),
+          _MobileSelectionToolbarAction(
+            label: 'Paste',
+            onPressed: onPaste,
+          ),
+          _MobileSelectionToolbarAction(
+            label: 'Select All',
+            onPressed: onSelectAll,
+          ),
+        ];
+
+        return Material(
+          borderRadius: BorderRadius.circular(10),
+          clipBehavior: Clip.antiAlias,
+          color: theme.colorScheme.surfaceContainerHighest,
+          elevation: 2,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Wrap(
+              spacing: 0,
+              runSpacing: 0,
+              children: [
+                for (final action in actions)
+                  TextButton(
+                    onPressed: action.onPressed,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                      textStyle: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    child: Text(action.label),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MobileSelectionToolbarAction {
+  const _MobileSelectionToolbarAction({
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
 }

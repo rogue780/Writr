@@ -8,6 +8,8 @@ import 'services/cloud_storage_service.dart';
 import 'services/recent_projects_service.dart';
 import 'services/cloud_sync_service.dart';
 import 'services/web_storage_service.dart';
+import 'services/preferences_service.dart';
+import 'widgets/orientation_policy.dart';
 
 void main() {
   runApp(const WritrApp());
@@ -25,6 +27,13 @@ class WritrApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CloudStorageService()),
         ChangeNotifierProvider(create: (_) => RecentProjectsService()),
         ChangeNotifierProvider(create: (_) => WebStorageService()),
+        ChangeNotifierProvider(
+          create: (_) {
+            final prefs = PreferencesService();
+            prefs.initialize();
+            return prefs;
+          },
+        ),
         ChangeNotifierProxyProvider<CloudStorageService, CloudSyncService>(
           create: (context) =>
               CloudSyncService(context.read<CloudStorageService>()),
@@ -38,6 +47,11 @@ class WritrApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
           useMaterial3: true,
         ),
+        builder: (context, child) {
+          return OrientationPolicy(
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,

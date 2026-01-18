@@ -7,8 +7,8 @@ import 'cloud_storage_provider.dart';
 
 class DropboxProvider implements CloudStorageProvider {
   static const String _appKey =
-      'YOUR_DROPBOX_APP_KEY'; // Replace with your app key
-  static const String _redirectUri = 'writr://oauth2redirect';
+      String.fromEnvironment('DROPBOX_APP_KEY', defaultValue: '');
+  static const String _redirectUri = 'writr://auth';
   static const String _tokenKey = 'dropbox_access_token';
 
   String? _accessToken;
@@ -35,6 +35,13 @@ class DropboxProvider implements CloudStorageProvider {
         _accessToken = null;
         await prefs.remove(_tokenKey);
       }
+    }
+
+    if (_appKey.isEmpty) {
+      throw Exception(
+        'Dropbox App key not configured. '
+        'Build/run with --dart-define=DROPBOX_APP_KEY=...',
+      );
     }
 
     // Start OAuth flow

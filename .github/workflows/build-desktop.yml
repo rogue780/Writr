@@ -14,6 +14,9 @@ jobs:
   build-windows:
     name: Build Windows
     runs-on: windows-latest
+    env:
+      DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+      ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID }}
 
     steps:
       - name: Checkout repository
@@ -32,7 +35,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Windows
-        run: flutter build windows --release
+        run: flutter build windows --release --dart-define=DROPBOX_APP_KEY=$env:DROPBOX_APP_KEY --dart-define=ONEDRIVE_CLIENT_ID=$env:ONEDRIVE_CLIENT_ID
 
       - name: Get version info
         id: version
@@ -57,6 +60,9 @@ jobs:
   build-macos:
     name: Build macOS
     runs-on: macos-latest
+    env:
+      DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+      ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID }}
 
     steps:
       - name: Checkout repository
@@ -75,7 +81,7 @@ jobs:
         run: flutter pub get
 
       - name: Build macOS
-        run: flutter build macos --release
+        run: flutter build macos --release --dart-define=DROPBOX_APP_KEY="$DROPBOX_APP_KEY" --dart-define=ONEDRIVE_CLIENT_ID="$ONEDRIVE_CLIENT_ID"
 
       - name: Get version info
         id: version
@@ -98,6 +104,9 @@ jobs:
   build-linux:
     name: Build Linux
     runs-on: ubuntu-latest
+    env:
+      DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+      ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID }}
 
     steps:
       - name: Checkout repository
@@ -121,7 +130,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Linux
-        run: flutter build linux --release
+        run: flutter build linux --release --dart-define=DROPBOX_APP_KEY="$DROPBOX_APP_KEY" --dart-define=ONEDRIVE_CLIENT_ID="$ONEDRIVE_CLIENT_ID"
 
       - name: Get version info
         id: version

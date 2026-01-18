@@ -15,6 +15,8 @@ class InspectorPanel extends StatefulWidget {
   final Function()? onCreateSnapshot;
   final Function(DocumentSnapshot)? onRestoreSnapshot;
   final Function(DocumentSnapshot)? onDeleteSnapshot;
+  final bool isPinned;
+  final VoidCallback? onTogglePinned;
   final VoidCallback? onClose;
 
   const InspectorPanel({
@@ -27,6 +29,8 @@ class InspectorPanel extends StatefulWidget {
     this.onCreateSnapshot,
     this.onRestoreSnapshot,
     this.onDeleteSnapshot,
+    this.isPinned = false,
+    this.onTogglePinned,
     this.onClose,
   });
 
@@ -137,6 +141,19 @@ class _InspectorPanelState extends State<InspectorPanel>
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (widget.onTogglePinned != null) ...[
+            IconButton(
+              icon: Icon(
+                widget.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                size: 20,
+              ),
+              tooltip: widget.isPinned ? 'Unpin' : 'Pin',
+              onPressed: widget.onTogglePinned,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+            const SizedBox(width: 12),
+          ],
           if (widget.onClose != null)
             IconButton(
               icon: const Icon(Icons.close, size: 20),

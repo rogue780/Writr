@@ -17,7 +17,7 @@ class PreferencesService extends ChangeNotifier {
   SharedPreferences? _prefs;
 
   // Cached values
-  ToolbarStyle _toolbarStyle = ToolbarStyle.simplified;
+  ToolbarStyle _toolbarStyle = ToolbarStyle.menuBar;
   bool _pageViewMode = false;
   double _binderWidth = 250;
   double _inspectorWidth = 300;
@@ -32,6 +32,16 @@ class PreferencesService extends ChangeNotifier {
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
     _loadPreferences();
+  }
+
+  Future<SharedPreferences> _ensurePrefs() async {
+    final existing = _prefs;
+    if (existing != null) {
+      return existing;
+    }
+
+    _prefs = await SharedPreferences.getInstance();
+    return _prefs!;
   }
 
   void _loadPreferences() {
@@ -56,29 +66,37 @@ class PreferencesService extends ChangeNotifier {
   /// Set the toolbar style
   Future<void> setToolbarStyle(ToolbarStyle style) async {
     _toolbarStyle = style;
-    await _prefs?.setInt(_toolbarStyleKey, style.index);
     notifyListeners();
+    final prefs = await _ensurePrefs();
+    await prefs.setInt(_toolbarStyleKey, style.index);
   }
 
   /// Set page view mode
   Future<void> setPageViewMode(bool enabled) async {
     _pageViewMode = enabled;
-    await _prefs?.setBool(_pageViewModeKey, enabled);
     notifyListeners();
+    final prefs = await _ensurePrefs();
+    await prefs.setBool(_pageViewModeKey, enabled);
   }
 
   /// Set binder width
-  Future<void> setBinderWidth(double width) async {
+  Future<void> setBinderWidth(double width, {bool persist = true}) async {
     _binderWidth = width;
-    await _prefs?.setDouble(_binderWidthKey, width);
-    // Don't notify for width changes to avoid rebuilds during drag
+    if (!persist) {
+      return;
+    }
+    final prefs = await _ensurePrefs();
+    await prefs.setDouble(_binderWidthKey, width);
   }
 
   /// Set inspector width
-  Future<void> setInspectorWidth(double width) async {
+  Future<void> setInspectorWidth(double width, {bool persist = true}) async {
     _inspectorWidth = width;
-    await _prefs?.setDouble(_inspectorWidthKey, width);
-    // Don't notify for width changes to avoid rebuilds during drag
+    if (!persist) {
+      return;
+    }
+    final prefs = await _ensurePrefs();
+    await prefs.setDouble(_inspectorWidthKey, width);
   }
 
   /// Toggle between toolbar styles

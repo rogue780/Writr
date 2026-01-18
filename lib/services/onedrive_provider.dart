@@ -7,8 +7,8 @@ import 'cloud_storage_provider.dart';
 
 class OneDriveProvider implements CloudStorageProvider {
   static const String _clientId =
-      'YOUR_MICROSOFT_CLIENT_ID'; // Replace with your client ID
-  static const String _redirectUri = 'writr://oauth2redirect';
+      String.fromEnvironment('ONEDRIVE_CLIENT_ID', defaultValue: '');
+  static const String _redirectUri = 'writr://auth';
   static const String _tokenKey = 'onedrive_access_token';
 
   String? _accessToken;
@@ -35,6 +35,13 @@ class OneDriveProvider implements CloudStorageProvider {
         _accessToken = null;
         await prefs.remove(_tokenKey);
       }
+    }
+
+    if (_clientId.isEmpty) {
+      throw Exception(
+        'OneDrive client ID not configured. '
+        'Build/run with --dart-define=ONEDRIVE_CLIENT_ID=...',
+      );
     }
 
     // Start OAuth flow
