@@ -870,6 +870,11 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
       return SplitEditor(
         state: _splitEditorState,
         textContents: service.currentProject!.textContents,
+        researchItems: service.currentProject!.researchItems,
+        pageViewMode: context.watch<PreferencesService>().pageViewMode,
+        onPageViewModeChanged: (enabled) {
+          context.read<PreferencesService>().setPageViewMode(enabled);
+        },
         onContentChanged: (documentId, content) {
           service.updateTextContent(documentId, content);
         },

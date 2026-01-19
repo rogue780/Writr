@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import '../models/editor_state.dart';
+import '../models/research_item.dart';
+import '../models/scrivener_project.dart';
+import 'research_viewer.dart';
 import 'rich_text_editor.dart';
 
 /// A split editor widget that displays two editor panes side by side or stacked.
 class SplitEditor extends StatefulWidget {
   final SplitEditorState state;
   final Map<String, String> textContents;
+  final Map<String, ResearchItem> researchItems;
+  final bool pageViewMode;
+  final ValueChanged<bool>? onPageViewModeChanged;
   final Function(String, String) onContentChanged;
   final Function(SplitEditorState) onStateChanged;
 
@@ -13,6 +19,9 @@ class SplitEditor extends StatefulWidget {
     super.key,
     required this.state,
     required this.textContents,
+    required this.researchItems,
+    this.pageViewMode = false,
+    this.onPageViewModeChanged,
     required this.onContentChanged,
     required this.onStateChanged,
   });
@@ -204,19 +213,40 @@ class _SplitEditorState extends State<SplitEditor> {
             // Editor content
             Expanded(
               child: document != null
-                  ? RichTextEditor(
-                      key: ValueKey('${document.id}_$isPrimary'),
-                      item: document,
-                      content: widget.textContents[document.id] ?? '',
-                      onContentChanged: (content) {
-                        widget.onContentChanged(document.id, content);
-                      },
-                    )
+                  ? (document.isResearchItem
+                      ? _buildResearchViewer(document)
+                      : RichTextEditor(
+                          key: ValueKey('${document.id}_$isPrimary'),
+                          item: document,
+                          content: widget.textContents[document.id] ?? '',
+                          pageViewMode: widget.pageViewMode,
+                          onPageViewModeChanged: widget.onPageViewModeChanged,
+                          onContentChanged: (content) {
+                            widget.onContentChanged(document.id, content);
+                          },
+                        ))
                   : _buildEmptyPane(isPrimary),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildResearchViewer(BinderItem binderItem) {
+    final item = widget.researchItems[binderItem.id];
+    if (item == null) {
+      return Center(
+        child: Text(
+          'Unable to load "${binderItem.title}"',
+          style: TextStyle(color: Colors.grey[600]),
+        ),
+      );
+    }
+
+    return ResearchViewer(
+      key: ValueKey('research_${binderItem.id}'),
+      item: item,
     );
   }
 

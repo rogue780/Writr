@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:typed_data';
 import '../models/research_item.dart';
+import '../utils/file_bytes.dart';
 import '../utils/web_download.dart';
 import 'pdf_viewer.dart';
 import 'image_viewer.dart';
 
 /// A widget that displays the appropriate viewer for a research item
-class ResearchViewer extends StatelessWidget {
+class ResearchViewer extends StatefulWidget {
   final ResearchItem item;
   final VoidCallback? onDelete;
   final Function(ResearchItem)? onUpdate;
@@ -19,7 +21,98 @@ class ResearchViewer extends StatelessWidget {
   });
 
   @override
+  State<ResearchViewer> createState() => _ResearchViewerState();
+}
+
+class _ResearchViewerState extends State<ResearchViewer> {
+  bool _isLoading = false;
+  String? _loadError;
+  Uint8List? _loadedData;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadedData = widget.item.data;
+    _maybeLoadFromFile();
+  }
+
+  @override
+  void didUpdateWidget(covariant ResearchViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.id != widget.item.id ||
+        oldWidget.item.filePath != widget.item.filePath ||
+        oldWidget.item.data != widget.item.data) {
+      _isLoading = false;
+      _loadError = null;
+      _loadedData = widget.item.data;
+      _maybeLoadFromFile();
+    }
+  }
+
+  Future<void> _maybeLoadFromFile() async {
+    if (kIsWeb) return;
+    if (_loadedData != null && _loadedData!.isNotEmpty) return;
+    if (_isLoading) return;
+
+    final filePath = widget.item.filePath;
+    if (filePath == null || filePath.isEmpty) return;
+
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+
+    final bytes = await readFileBytes(filePath);
+    if (!mounted) return;
+
+    if (bytes == null || bytes.isEmpty) {
+      setState(() {
+        _isLoading = false;
+        _loadError = 'Unable to read file data';
+      });
+      return;
+    }
+
+    setState(() {
+      _loadedData = bytes;
+      _isLoading = false;
+    });
+  }
+
+  ResearchItem get _effectiveItem {
+    final data = _loadedData;
+    if (data == null) return widget.item;
+
+    return ResearchItem(
+      id: widget.item.id,
+      title: widget.item.title,
+      type: widget.item.type,
+      filePath: widget.item.filePath,
+      data: data,
+      mimeType: widget.item.mimeType,
+      fileSize: widget.item.fileSize ?? data.length,
+      createdAt: widget.item.createdAt,
+      modifiedAt: widget.item.modifiedAt,
+      description: widget.item.description,
+      linkedDocumentIds: widget.item.linkedDocumentIds,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading && _loadedData == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_loadError != null && (_loadedData == null || _loadedData!.isEmpty)) {
+      return Center(
+        child: Text(
+          _loadError!,
+          style: TextStyle(color: Colors.grey[600]),
+        ),
+      );
+    }
+
+    final item = _effectiveItem;
     switch (item.type) {
       case ResearchItemType.pdf:
         return PdfViewer(
@@ -46,7 +139,8 @@ class ResearchViewer extends StatelessWidget {
   }
 
   void _downloadItem(BuildContext context) {
-    if (item.data == null) {
+    final data = _loadedData ?? widget.item.data;
+    if (data == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No data available to download'),
@@ -56,10 +150,10 @@ class ResearchViewer extends StatelessWidget {
       return;
     }
 
-    final fileName = '${item.title}.${item.fileExtension}';
+    final fileName = '${widget.item.title}.${widget.item.fileExtension}';
 
     if (kIsWeb) {
-      downloadBytes(item.data!.toList(), fileName);
+      downloadBytes(data.toList(), fileName);
     } else {
       // For desktop, show a message - could integrate file_picker save dialog
       ScaffoldMessenger.of(context).showSnackBar(

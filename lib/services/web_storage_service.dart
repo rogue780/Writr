@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:archive/archive.dart';
 import 'package:xml/xml.dart';
 import '../models/scrivener_project.dart';
+import '../models/research_item.dart';
 import '../utils/rtf_parser.dart';
 
 /// Service for storing Scrivener projects in browser storage (web platform)
@@ -226,6 +227,20 @@ class WebStorageService extends ChangeNotifier {
       ));
     }
 
+    // Add research items (PDFs/images/etc.) when available.
+    for (final item in project.researchItems.values) {
+      if (item.data == null || item.data!.isEmpty) {
+        continue;
+      }
+
+      final fileName = '${item.id}.${item.fileExtension}';
+      archive.addFile(ArchiveFile(
+        'Files/Docs/$fileName',
+        item.data!.length,
+        item.data!,
+      ));
+    }
+
     // Encode as zip
     final zipEncoder = ZipEncoder();
     final zipBytes = zipEncoder.encode(archive);
@@ -251,6 +266,17 @@ class WebStorageService extends ChangeNotifier {
 
       // Load text contents from Files/Data
       final textContents = <String, String>{};
+      final binderTitleById = <String, String>{};
+      void collectTitles(List<BinderItem> items) {
+        for (final item in items) {
+          binderTitleById[item.id] = item.title;
+          if (item.children.isNotEmpty) {
+            collectTitles(item.children);
+          }
+        }
+      }
+      collectTitles(binderItems);
+
       for (final file in archive.files) {
         if (file.name.startsWith('Files/Data/') && file.content.isNotEmpty) {
           // Remove 'Files/Data/' prefix to get relative path
@@ -286,6 +312,48 @@ class WebStorageService extends ChangeNotifier {
       }
       print('Loaded ${textContents.length} text contents');
 
+      // Load research items from Files/Docs (PDFs/images/etc.).
+      final researchItems = <String, ResearchItem>{};
+      for (final file in archive.files) {
+        if (!file.name.startsWith('Files/Docs/') || file.content.isEmpty) {
+          continue;
+        }
+
+        final relativePath = file.name.substring('Files/Docs/'.length);
+        if (relativePath.isEmpty || relativePath.endsWith('/')) {
+          continue;
+        }
+
+        final pathSegments = relativePath.split('/');
+        final baseName = pathSegments.isNotEmpty ? pathSegments.last : relativePath;
+        final lastDot = baseName.lastIndexOf('.');
+        final extension = lastDot == -1 ? '' : baseName.substring(lastDot + 1);
+
+        final fileId = pathSegments.length > 1
+            ? pathSegments.first
+            : (lastDot == -1 ? baseName : baseName.substring(0, lastDot));
+
+        if (fileId.isEmpty) {
+          continue;
+        }
+
+        final bytes = Uint8List.fromList(file.content as List<int>);
+        final now = DateTime.now();
+        final type = ResearchItemType.fromExtension(extension);
+
+        researchItems[fileId] = ResearchItem(
+          id: fileId,
+          title: binderTitleById[fileId] ?? fileId,
+          type: type,
+          data: bytes,
+          mimeType: type.mimeTypePattern,
+          fileSize: bytes.length,
+          createdAt: now,
+          modifiedAt: now,
+        );
+      }
+      print('Loaded ${researchItems.length} research items');
+
       // Create project
       final projectPath = 'web_${projectName.replaceAll(' ', '_')}';
       final project = ScrivenerProject(
@@ -293,6 +361,7 @@ class WebStorageService extends ChangeNotifier {
         path: projectPath,
         binderItems: binderItems,
         textContents: textContents,
+        researchItems: researchItems,
         settings: ProjectSettings.defaults(),
       );
 

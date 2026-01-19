@@ -75,6 +75,9 @@ class ScrivenerService extends ChangeNotifier {
       // Load text contents from Files/Data directory
       final textContents = await _loadTextContents(projectDir);
 
+      // Load research items (PDFs, images, web archives) from project files
+      final researchItems = await _loadResearchItems(projectDir, binderItems);
+
       // Create project
       final projectName = path.basenameWithoutExtension(scrivxFile.path);
       _currentProject = ScrivenerProject(
@@ -82,6 +85,7 @@ class ScrivenerService extends ChangeNotifier {
         path: projectPath,
         binderItems: binderItems,
         textContents: textContents,
+        researchItems: researchItems,
         settings: ProjectSettings.defaults(),
       );
 
@@ -281,6 +285,152 @@ class ScrivenerService extends ChangeNotifier {
     return textContents;
   }
 
+  Future<Map<String, ResearchItem>> _loadResearchItems(
+    Directory projectDir,
+    List<BinderItem> binderItems,
+  ) async {
+    final researchBinderItems = <BinderItem>[];
+    void collect(List<BinderItem> items) {
+      for (final item in items) {
+        if (item.isResearchItem) {
+          researchBinderItems.add(item);
+        }
+        if (item.children.isNotEmpty) {
+          collect(item.children);
+        }
+      }
+    }
+    collect(binderItems);
+
+    if (researchBinderItems.isEmpty) {
+      return {};
+    }
+
+    final fileIndex = await _indexResearchFiles(projectDir);
+    final researchItems = <String, ResearchItem>{};
+
+    for (final binderItem in researchBinderItems) {
+      final file = fileIndex[binderItem.id];
+      if (file == null) {
+        continue;
+      }
+
+      try {
+        final stat = await file.stat();
+        final ext = path.extension(file.path).toLowerCase();
+        final type = _binderTypeToResearchType(binderItem.type, ext);
+
+        researchItems[binderItem.id] = ResearchItem(
+          id: binderItem.id,
+          title: binderItem.title,
+          type: type,
+          filePath: file.path,
+          mimeType: _mimeTypeForExtension(ext),
+          fileSize: stat.size,
+          createdAt: stat.modified,
+          modifiedAt: stat.modified,
+        );
+      } catch (e) {
+        debugPrint('Error loading research file for ${binderItem.id}: $e');
+      }
+    }
+
+    debugPrint('Loaded ${researchItems.length} research items');
+    return researchItems;
+  }
+
+  Future<Map<String, File>> _indexResearchFiles(Directory projectDir) async {
+    // Scrivener stores non-text documents (PDFs/images/etc.) in `Files/Docs`
+    // and sometimes in nested directories under it.
+    final candidateDirs = <String>[
+      path.join(projectDir.path, 'Files', 'Docs'),
+      path.join(projectDir.path, 'Files', 'Data'),
+    ];
+
+    const allowedExtensions = <String>{
+      '.pdf',
+      '.jpg',
+      '.jpeg',
+      '.png',
+      '.gif',
+      '.webp',
+      '.bmp',
+      '.tif',
+      '.tiff',
+      '.webarchive',
+      '.mhtml',
+    };
+
+    final index = <String, File>{};
+
+    for (final dirPath in candidateDirs) {
+      final dir = Directory(dirPath);
+      if (!await dir.exists()) {
+        continue;
+      }
+
+      await for (final entity in dir.list(recursive: true, followLinks: false)) {
+        if (entity is! File) continue;
+
+        final ext = path.extension(entity.path).toLowerCase();
+        if (!allowedExtensions.contains(ext)) continue;
+
+        final base = path.basenameWithoutExtension(entity.path);
+        final parent = path.basename(path.dirname(entity.path));
+
+        index.putIfAbsent(base, () => entity);
+        index.putIfAbsent(parent, () => entity);
+      }
+    }
+
+    return index;
+  }
+
+  ResearchItemType _binderTypeToResearchType(
+    BinderItemType binderType,
+    String fileExtension,
+  ) {
+    switch (binderType) {
+      case BinderItemType.pdf:
+        return ResearchItemType.pdf;
+      case BinderItemType.image:
+        return ResearchItemType.image;
+      case BinderItemType.webArchive:
+        return ResearchItemType.webArchive;
+      case BinderItemType.folder:
+      case BinderItemType.text:
+        // Not expected here, but fall back to file extension.
+        return ResearchItemType.fromExtension(fileExtension);
+    }
+  }
+
+  String _mimeTypeForExtension(String extension) {
+    switch (extension) {
+      case '.pdf':
+        return 'application/pdf';
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.png':
+        return 'image/png';
+      case '.gif':
+        return 'image/gif';
+      case '.webp':
+        return 'image/webp';
+      case '.bmp':
+        return 'image/bmp';
+      case '.tif':
+      case '.tiff':
+        return 'image/tiff';
+      case '.webarchive':
+        return 'application/x-webarchive';
+      case '.mhtml':
+        return 'multipart/related';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
   /// Save the current project
   Future<void> saveProject() async {
     if (_currentProject == null) return;
@@ -300,6 +450,9 @@ class ScrivenerService extends ChangeNotifier {
 
       // Save text contents to Files/Data directory
       await _saveTextContents(projectDir, _currentProject!.textContents);
+
+      // Save research items (PDFs/images/etc.) to Files/Docs directory
+      await _saveResearchItems(projectDir);
 
       // Preserve existing .scrivx files unless we can update them safely.
       final scrivxPath = _loadedScrivxPath ??
@@ -368,6 +521,72 @@ class ScrivenerService extends ChangeNotifier {
 
       _contentFilePathById[entry.key] = file.path;
     }
+  }
+
+  Future<void> _saveResearchItems(Directory projectDir) async {
+    if (_currentProject == null) return;
+
+    final docsDir = Directory(path.join(projectDir.path, 'Files', 'Docs'));
+    await docsDir.create(recursive: true);
+
+    final updatedItems = Map<String, ResearchItem>.from(_currentProject!.researchItems);
+    var changed = false;
+
+    for (final entry in _currentProject!.researchItems.entries) {
+      final item = entry.value;
+      if (item.data == null || item.data!.isEmpty) {
+        continue;
+      }
+
+      // If this item already points to a file, assume it is the source of truth
+      // unless the file is missing (e.g. a newly imported item without path).
+      final existingPath = item.filePath;
+      if (existingPath != null && existingPath.isNotEmpty) {
+        final file = File(existingPath);
+        if (await file.exists()) {
+          continue;
+        }
+      }
+
+      final fileName = '${item.id}.${item.fileExtension}';
+      final file = File(path.join(docsDir.path, fileName));
+      await file.parent.create(recursive: true);
+      await file.writeAsBytes(item.data!, flush: true);
+      final stat = await file.stat();
+
+      updatedItems[item.id] = ResearchItem(
+        id: item.id,
+        title: item.title,
+        type: item.type,
+        filePath: file.path,
+        data: item.data,
+        mimeType: item.mimeType,
+        fileSize: stat.size,
+        createdAt: item.createdAt,
+        modifiedAt: stat.modified,
+        description: item.description,
+        linkedDocumentIds: item.linkedDocumentIds,
+      );
+      changed = true;
+    }
+
+    if (!changed) return;
+
+    _currentProject = ScrivenerProject(
+      name: _currentProject!.name,
+      path: _currentProject!.path,
+      binderItems: _currentProject!.binderItems,
+      textContents: _currentProject!.textContents,
+      documentMetadata: _currentProject!.documentMetadata,
+      documentSnapshots: _currentProject!.documentSnapshots,
+      researchItems: updatedItems,
+      documentComments: _currentProject!.documentComments,
+      documentFootnotes: _currentProject!.documentFootnotes,
+      footnoteSettings: _currentProject!.footnoteSettings,
+      settings: _currentProject!.settings,
+      labels: _currentProject!.labels,
+      statuses: _currentProject!.statuses,
+    );
   }
 
   /// Save .scrivx XML file
@@ -505,6 +724,10 @@ class ScrivenerService extends ChangeNotifier {
       textContents: updatedContents,
       documentMetadata: _currentProject!.documentMetadata,
       documentSnapshots: _currentProject!.documentSnapshots,
+      researchItems: _currentProject!.researchItems,
+      documentComments: _currentProject!.documentComments,
+      documentFootnotes: _currentProject!.documentFootnotes,
+      footnoteSettings: _currentProject!.footnoteSettings,
       settings: _currentProject!.settings,
       labels: _currentProject!.labels,
       statuses: _currentProject!.statuses,
@@ -529,6 +752,10 @@ class ScrivenerService extends ChangeNotifier {
       textContents: _currentProject!.textContents,
       documentMetadata: updatedMetadata,
       documentSnapshots: _currentProject!.documentSnapshots,
+      researchItems: _currentProject!.researchItems,
+      documentComments: _currentProject!.documentComments,
+      documentFootnotes: _currentProject!.documentFootnotes,
+      footnoteSettings: _currentProject!.footnoteSettings,
       settings: _currentProject!.settings,
       labels: _currentProject!.labels,
       statuses: _currentProject!.statuses,
@@ -640,7 +867,15 @@ class ScrivenerService extends ChangeNotifier {
       path: _currentProject!.path,
       binderItems: updatedItems,
       textContents: _currentProject!.textContents,
+      documentMetadata: _currentProject!.documentMetadata,
+      documentSnapshots: _currentProject!.documentSnapshots,
+      researchItems: _currentProject!.researchItems,
+      documentComments: _currentProject!.documentComments,
+      documentFootnotes: _currentProject!.documentFootnotes,
+      footnoteSettings: _currentProject!.footnoteSettings,
       settings: _currentProject!.settings,
+      labels: _currentProject!.labels,
+      statuses: _currentProject!.statuses,
     );
 
     notifyListeners();
@@ -662,7 +897,15 @@ class ScrivenerService extends ChangeNotifier {
       path: _currentProject!.path,
       binderItems: updatedItems,
       textContents: _currentProject!.textContents,
+      documentMetadata: _currentProject!.documentMetadata,
+      documentSnapshots: _currentProject!.documentSnapshots,
+      researchItems: _currentProject!.researchItems,
+      documentComments: _currentProject!.documentComments,
+      documentFootnotes: _currentProject!.documentFootnotes,
+      footnoteSettings: _currentProject!.footnoteSettings,
       settings: _currentProject!.settings,
+      labels: _currentProject!.labels,
+      statuses: _currentProject!.statuses,
     );
 
     notifyListeners();
@@ -688,7 +931,15 @@ class ScrivenerService extends ChangeNotifier {
       path: _currentProject!.path,
       binderItems: updatedItems,
       textContents: updatedContents,
+      documentMetadata: _currentProject!.documentMetadata,
+      documentSnapshots: _currentProject!.documentSnapshots,
+      researchItems: _currentProject!.researchItems,
+      documentComments: _currentProject!.documentComments,
+      documentFootnotes: _currentProject!.documentFootnotes,
+      footnoteSettings: _currentProject!.footnoteSettings,
       settings: _currentProject!.settings,
+      labels: _currentProject!.labels,
+      statuses: _currentProject!.statuses,
     );
 
     notifyListeners();
@@ -809,6 +1060,7 @@ class ScrivenerService extends ChangeNotifier {
   /// Add a research item and create corresponding binder item
   void addResearchItem(ResearchItem item, {String? parentFolderId}) {
     if (_currentProject == null) return;
+    _scrivxDirty = true;
 
     // Determine the correct binder item type based on research type
     final binderType = _researchTypeToBinderType(item.type);
@@ -853,6 +1105,9 @@ class ScrivenerService extends ChangeNotifier {
         ..._currentProject!.researchItems,
         item.id: item,
       },
+      documentComments: _currentProject!.documentComments,
+      documentFootnotes: _currentProject!.documentFootnotes,
+      footnoteSettings: _currentProject!.footnoteSettings,
       settings: _currentProject!.settings,
       labels: _currentProject!.labels,
       statuses: _currentProject!.statuses,
@@ -874,6 +1129,7 @@ class ScrivenerService extends ChangeNotifier {
   /// Delete a research item and its binder entry
   void deleteResearchItem(String itemId) {
     if (_currentProject == null) return;
+    _scrivxDirty = true;
 
     // Remove binder item
     final updatedItems = _deleteItemRecursive(
@@ -895,6 +1151,9 @@ class ScrivenerService extends ChangeNotifier {
       documentMetadata: _currentProject!.documentMetadata,
       documentSnapshots: _currentProject!.documentSnapshots,
       researchItems: newResearchItems,
+      documentComments: _currentProject!.documentComments,
+      documentFootnotes: _currentProject!.documentFootnotes,
+      footnoteSettings: _currentProject!.footnoteSettings,
       settings: _currentProject!.settings,
       labels: _currentProject!.labels,
       statuses: _currentProject!.statuses,
