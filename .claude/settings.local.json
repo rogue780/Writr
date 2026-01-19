@@ -6,7 +6,10 @@
       "Bash(flutter pub get:*)",
       "Bash(flutter analyze:*)",
       "Bash(cmd /c \"flutter analyze lib/screens/project_editor_screen.dart lib/widgets/split_editor.dart lib/models/editor_state.dart\")",
-      "Bash(flutter test:*)"
+      "Bash(flutter test:*)",
+      "Bash(head:*)",
+      "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && head -30 {}')",
+      "Bash(grep:*)"
     ]
   }
 }
