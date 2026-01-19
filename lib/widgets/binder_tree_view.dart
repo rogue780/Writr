@@ -9,6 +9,7 @@ class BinderTreeView extends StatelessWidget {
   final Function(BinderItem) onItemSelected;
   final BinderItem? selectedItem;
   final VoidCallback? onClose;
+  final ProjectMode projectMode;
 
   const BinderTreeView({
     super.key,
@@ -16,7 +17,10 @@ class BinderTreeView extends StatelessWidget {
     required this.onItemSelected,
     this.selectedItem,
     this.onClose,
+    this.projectMode = ProjectMode.native,
   });
+
+  bool get isScrivenerMode => projectMode == ProjectMode.scrivener;
 
   @override
   Widget build(BuildContext context) {
@@ -45,39 +49,49 @@ class BinderTreeView extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.add, size: 20),
-                  tooltip: 'Add Item',
-                  onSelected: (value) {
-                    if (value == 'folder') {
-                      _showAddDialog(context, BinderItemType.folder, null);
-                    } else if (value == 'document') {
-                      _showAddDialog(context, BinderItemType.text, null);
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'folder',
-                      child: Row(
-                        children: [
-                          Icon(Icons.folder, size: 18, color: Colors.blue),
-                          SizedBox(width: 8),
-                          Text('New Folder'),
-                        ],
-                      ),
+                if (isScrivenerMode)
+                  Tooltip(
+                    message: 'Disabled in Scrivener mode',
+                    child: Icon(
+                      Icons.add,
+                      size: 20,
+                      color: Theme.of(context).disabledColor,
                     ),
-                    const PopupMenuItem(
-                      value: 'document',
-                      child: Row(
-                        children: [
-                          Icon(Icons.description, size: 18, color: Colors.grey),
-                          SizedBox(width: 8),
-                          Text('New Document'),
-                        ],
+                  )
+                else
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.add, size: 20),
+                    tooltip: 'Add Item',
+                    onSelected: (value) {
+                      if (value == 'folder') {
+                        _showAddDialog(context, BinderItemType.folder, null);
+                      } else if (value == 'document') {
+                        _showAddDialog(context, BinderItemType.text, null);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'folder',
+                        child: Row(
+                          children: [
+                            Icon(Icons.folder, size: 18, color: Colors.blue),
+                            SizedBox(width: 8),
+                            Text('New Folder'),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                      const PopupMenuItem(
+                        value: 'document',
+                        child: Row(
+                          children: [
+                            Icon(Icons.description, size: 18, color: Colors.grey),
+                            SizedBox(width: 8),
+                            Text('New Document'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 if (onClose != null) ...[
                   const SizedBox(width: 8),
                   IconButton(
@@ -99,6 +113,7 @@ class BinderTreeView extends StatelessWidget {
                   onItemSelected: onItemSelected,
                   selectedItem: selectedItem,
                   depth: 0,
+                  projectMode: projectMode,
                 );
               }).toList(),
             ),
@@ -136,17 +151,78 @@ class BinderTreeView extends StatelessWidget {
           TextButton(
             onPressed: () {
               if (controller.text.isNotEmpty) {
-                context.read<ScrivenerService>().addBinderItem(
-                      title: controller.text,
-                      type: type,
-                      parentId: parentId,
-                    );
-                Navigator.pop(context);
+                try {
+                  context.read<ScrivenerService>().addBinderItem(
+                        title: controller.text,
+                        type: type,
+                        parentId: parentId,
+                      );
+                  Navigator.pop(context);
+                } on StateError catch (e) {
+                  Navigator.pop(context);
+                  _showScrivenerModeError(context, e.message);
+                }
               }
             },
             child: const Text('Add'),
           ),
         ],
+      ),
+    );
+  }
+
+  static void _showScrivenerModeError(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.lock_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(message),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.amber.shade800,
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'Learn More',
+          textColor: Colors.white,
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Scrivener Mode'),
+                content: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'This project is opened in Scrivener-compatible mode to protect your original .scriv project from corruption.',
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'In this mode, you can:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text('• Edit document text'),
+                    Text('• Create and restore snapshots'),
+                    SizedBox(height: 12),
+                    Text(
+                      'To make structural changes (add/delete/rename), convert to Writr format using File → Convert to Writr Format.',
+                    ),
+                  ],
+                ),
+                actions: [
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Got it'),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -157,13 +233,17 @@ class _BinderItemWidget extends StatefulWidget {
   final Function(BinderItem) onItemSelected;
   final BinderItem? selectedItem;
   final int depth;
+  final ProjectMode projectMode;
 
   const _BinderItemWidget({
     required this.item,
     required this.onItemSelected,
     this.selectedItem,
     required this.depth,
+    this.projectMode = ProjectMode.native,
   });
+
+  bool get isScrivenerMode => projectMode == ProjectMode.scrivener;
 
   @override
   State<_BinderItemWidget> createState() => _BinderItemWidgetState();
@@ -243,6 +323,7 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
               onItemSelected: widget.onItemSelected,
               selectedItem: widget.selectedItem,
               depth: widget.depth + 1,
+              projectMode: widget.projectMode,
             );
           }),
       ],
@@ -253,6 +334,8 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
     // Check if this is or is under the Research folder
     final isResearchFolder = widget.item.title.toLowerCase() == 'research' &&
                             widget.item.isFolder;
+    final isScrivenerMode = widget.isScrivenerMode;
+    final disabledColor = Theme.of(context).disabledColor;
 
     showModalBottomSheet(
       context: context,
@@ -260,18 +343,52 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Scrivener mode banner
+            if (isScrivenerMode)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: Colors.amber.withValues(alpha: 0.2),
+                child: Row(
+                  children: [
+                    Icon(Icons.lock_outline, size: 16, color: Colors.amber.shade800),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Scrivener mode: structural changes disabled',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.amber.shade800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ListTile(
-              leading: const Icon(Icons.folder, color: Colors.blue),
-              title: const Text('Add Folder'),
-              onTap: () {
+              leading: Icon(
+                Icons.folder,
+                color: isScrivenerMode ? disabledColor : Colors.blue,
+              ),
+              title: Text(
+                'Add Folder',
+                style: TextStyle(color: isScrivenerMode ? disabledColor : null),
+              ),
+              enabled: !isScrivenerMode,
+              onTap: isScrivenerMode ? null : () {
                 Navigator.pop(context);
                 _showAddDialog(context, BinderItemType.folder, widget.item.id);
               },
             ),
             ListTile(
-              leading: const Icon(Icons.description, color: Colors.grey),
-              title: const Text('Add Document'),
-              onTap: () {
+              leading: Icon(
+                Icons.description,
+                color: isScrivenerMode ? disabledColor : Colors.grey,
+              ),
+              title: Text(
+                'Add Document',
+                style: TextStyle(color: isScrivenerMode ? disabledColor : null),
+              ),
+              enabled: !isScrivenerMode,
+              onTap: isScrivenerMode ? null : () {
                 Navigator.pop(context);
                 _showAddDialog(context, BinderItemType.text, widget.item.id);
               },
@@ -279,25 +396,46 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
             // Show import option for Research folder or any folder
             if (widget.item.isFolder)
               ListTile(
-                leading: const Icon(Icons.file_upload, color: Colors.purple),
-                title: Text(isResearchFolder ? 'Import Research Files' : 'Import Files'),
-                onTap: () {
+                leading: Icon(
+                  Icons.file_upload,
+                  color: isScrivenerMode ? disabledColor : Colors.purple,
+                ),
+                title: Text(
+                  isResearchFolder ? 'Import Research Files' : 'Import Files',
+                  style: TextStyle(color: isScrivenerMode ? disabledColor : null),
+                ),
+                enabled: !isScrivenerMode,
+                onTap: isScrivenerMode ? null : () {
                   Navigator.pop(context);
                   _importResearchFiles(context, widget.item.id);
                 },
               ),
             ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('Rename'),
-              onTap: () {
+              leading: Icon(
+                Icons.edit,
+                color: isScrivenerMode ? disabledColor : null,
+              ),
+              title: Text(
+                'Rename',
+                style: TextStyle(color: isScrivenerMode ? disabledColor : null),
+              ),
+              enabled: !isScrivenerMode,
+              onTap: isScrivenerMode ? null : () {
                 Navigator.pop(context);
                 _showRenameDialog(context);
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: const Text('Delete'),
-              onTap: () {
+              leading: Icon(
+                Icons.delete,
+                color: isScrivenerMode ? disabledColor : Colors.red,
+              ),
+              title: Text(
+                'Delete',
+                style: TextStyle(color: isScrivenerMode ? disabledColor : null),
+              ),
+              enabled: !isScrivenerMode,
+              onTap: isScrivenerMode ? null : () {
                 Navigator.pop(context);
                 _showDeleteDialog(context);
               },
@@ -381,12 +519,17 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
           TextButton(
             onPressed: () {
               if (controller.text.isNotEmpty) {
-                context.read<ScrivenerService>().addBinderItem(
-                      title: controller.text,
-                      type: type,
-                      parentId: parentId,
-                    );
-                Navigator.pop(context);
+                try {
+                  context.read<ScrivenerService>().addBinderItem(
+                        title: controller.text,
+                        type: type,
+                        parentId: parentId,
+                      );
+                  Navigator.pop(context);
+                } on StateError catch (e) {
+                  Navigator.pop(context);
+                  BinderTreeView._showScrivenerModeError(context, e.message);
+                }
               }
             },
             child: const Text('Add'),
@@ -418,11 +561,16 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
           TextButton(
             onPressed: () {
               if (controller.text.isNotEmpty) {
-                context.read<ScrivenerService>().renameBinderItem(
-                      widget.item.id,
-                      controller.text,
-                    );
-                Navigator.pop(context);
+                try {
+                  context.read<ScrivenerService>().renameBinderItem(
+                        widget.item.id,
+                        controller.text,
+                      );
+                  Navigator.pop(context);
+                } on StateError catch (e) {
+                  Navigator.pop(context);
+                  BinderTreeView._showScrivenerModeError(context, e.message);
+                }
               }
             },
             child: const Text('Rename'),
@@ -447,8 +595,13 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
           ),
           TextButton(
             onPressed: () {
-              context.read<ScrivenerService>().deleteBinderItem(widget.item.id);
-              Navigator.pop(context);
+              try {
+                context.read<ScrivenerService>().deleteBinderItem(widget.item.id);
+                Navigator.pop(context);
+              } on StateError catch (e) {
+                Navigator.pop(context);
+                BinderTreeView._showScrivenerModeError(context, e.message);
+              }
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
@@ -474,17 +627,31 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
   }
 
   Color _getColorForType(BinderItemType type) {
+    Color baseColor;
     switch (type) {
       case BinderItemType.folder:
-        return Colors.blue;
+        baseColor = Colors.blue;
+        break;
       case BinderItemType.text:
-        return Colors.grey;
+        baseColor = Colors.grey;
+        break;
       case BinderItemType.image:
-        return Colors.green;
+        baseColor = Colors.green;
+        break;
       case BinderItemType.pdf:
-        return Colors.red;
+        baseColor = Colors.red;
+        break;
       case BinderItemType.webArchive:
-        return Colors.orange;
+        baseColor = Colors.orange;
+        break;
     }
+
+    // Desaturate colors in Scrivener mode
+    if (widget.isScrivenerMode) {
+      final hsl = HSLColor.fromColor(baseColor);
+      return hsl.withSaturation(hsl.saturation * 0.3).toColor();
+    }
+
+    return baseColor;
   }
 }

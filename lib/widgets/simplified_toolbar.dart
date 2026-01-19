@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/view_mode.dart';
+import '../services/scrivener_service.dart';
 
 /// Simplified modern toolbar with grouped dropdown menus
 class SimplifiedToolbar extends StatelessWidget {
   // Project info
   final String projectName;
   final bool hasUnsavedChanges;
+  final ProjectMode projectMode;
 
   // View state
   final ViewMode viewMode;
@@ -28,9 +30,13 @@ class SimplifiedToolbar extends StatelessWidget {
 
   // File callbacks
   final VoidCallback? onSave;
+  final VoidCallback? onSaveAs;
+  final VoidCallback? onOpenProject;
+  final VoidCallback? onNewProject;
   final VoidCallback? onExport;
   final VoidCallback? onImport;
   final VoidCallback? onBackups;
+  final VoidCallback? onConvertToWritr;
 
   // Project callbacks
   final VoidCallback? onCompile;
@@ -54,6 +60,7 @@ class SimplifiedToolbar extends StatelessWidget {
     super.key,
     required this.projectName,
     this.hasUnsavedChanges = false,
+    this.projectMode = ProjectMode.native,
     this.viewMode = ViewMode.editor,
     this.showBinder = true,
     this.showInspector = true,
@@ -68,9 +75,13 @@ class SimplifiedToolbar extends StatelessWidget {
     this.onToggleCollections,
     this.onToggleSplitEditor,
     this.onSave,
+    this.onSaveAs,
+    this.onOpenProject,
+    this.onNewProject,
     this.onExport,
     this.onImport,
     this.onBackups,
+    this.onConvertToWritr,
     this.onCompile,
     this.onTargets,
     this.onSessionTarget,
@@ -100,7 +111,10 @@ class SimplifiedToolbar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Project name with unsaved indicator
+          // File dropdown
+          _buildFileDropdown(context),
+
+          // Project name with unsaved indicator and mode badge
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -122,6 +136,9 @@ class SimplifiedToolbar extends StatelessWidget {
                   ),
                 ),
               ],
+              const SizedBox(width: 8),
+              // Mode indicator badge
+              _buildModeIndicator(context),
             ],
           ),
 
@@ -398,6 +415,114 @@ class SimplifiedToolbar extends StatelessWidget {
           Text(label),
         ],
       ),
+    );
+  }
+
+  Widget _buildModeIndicator(BuildContext context) {
+    final isScrivenerMode = projectMode == ProjectMode.scrivener;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Tooltip(
+      message: isScrivenerMode
+          ? 'Scrivener Mode: Only text editing allowed to preserve project integrity'
+          : 'Writr Mode: Full editing capabilities',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: isScrivenerMode
+              ? Colors.amber.withValues(alpha: 0.2)
+              : colorScheme.primaryContainer.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isScrivenerMode
+                ? Colors.amber.shade700
+                : colorScheme.primary.withValues(alpha: 0.5),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isScrivenerMode ? Icons.lock_outline : Icons.edit_note,
+              size: 12,
+              color: isScrivenerMode ? Colors.amber.shade800 : colorScheme.primary,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              isScrivenerMode ? 'Scrivener' : 'Writr',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: isScrivenerMode ? Colors.amber.shade800 : colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFileDropdown(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: 'File',
+      offset: const Offset(0, 40),
+      onSelected: (value) {
+        switch (value) {
+          case 'new':
+            onNewProject?.call();
+            break;
+          case 'open':
+            onOpenProject?.call();
+            break;
+          case 'save':
+            onSave?.call();
+            break;
+          case 'save_as':
+            onSaveAs?.call();
+            break;
+          case 'export':
+            onExport?.call();
+            break;
+          case 'import':
+            onImport?.call();
+            break;
+          case 'backups':
+            onBackups?.call();
+            break;
+          case 'convert':
+            onConvertToWritr?.call();
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        _buildMenuItem('new', 'New Project...', Icons.create_new_folder),
+        _buildMenuItem('open', 'Open Project...', Icons.folder_open),
+        const PopupMenuDivider(),
+        _buildMenuItem('save', 'Save', Icons.save),
+        _buildMenuItem('save_as', 'Save As...', Icons.save_as),
+        const PopupMenuDivider(),
+        if (projectMode == ProjectMode.scrivener) ...[
+          PopupMenuItem<String>(
+            value: 'convert',
+            child: Row(
+              children: [
+                Icon(Icons.transform, size: 18, color: Colors.amber.shade700),
+                const SizedBox(width: 12),
+                Text(
+                  'Convert to Writr Format...',
+                  style: TextStyle(color: Colors.amber.shade700),
+                ),
+              ],
+            ),
+          ),
+          const PopupMenuDivider(),
+        ],
+        _buildMenuItem('export', 'Export Project...', Icons.download),
+        _buildMenuItem('import', 'Import Project...', Icons.upload),
+        const PopupMenuDivider(),
+        _buildMenuItem('backups', 'Backup Manager...', Icons.backup),
+      ],
+      child: _buildDropdownButton(context, 'File', Icons.insert_drive_file),
     );
   }
 }

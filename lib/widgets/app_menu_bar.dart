@@ -1,13 +1,21 @@
 import 'package:flutter/material.dart';
 import '../models/view_mode.dart';
+import '../services/scrivener_service.dart';
 
 /// Traditional menu bar with File/Edit/View/Project/Tools menus
 class AppMenuBar extends StatelessWidget {
+  // Project mode
+  final ProjectMode projectMode;
+
   // File menu callbacks
   final VoidCallback? onSave;
+  final VoidCallback? onSaveAs;
+  final VoidCallback? onOpenProject;
+  final VoidCallback? onNewProject;
   final VoidCallback? onExport;
   final VoidCallback? onImport;
   final VoidCallback? onBackups;
+  final VoidCallback? onConvertToWritr;
   final VoidCallback? onClose;
 
   // View menu callbacks
@@ -44,11 +52,17 @@ class AppMenuBar extends StatelessWidget {
 
   const AppMenuBar({
     super.key,
+    // Mode
+    this.projectMode = ProjectMode.native,
     // File
     this.onSave,
+    this.onSaveAs,
+    this.onOpenProject,
+    this.onNewProject,
     this.onExport,
     this.onImport,
     this.onBackups,
+    this.onConvertToWritr,
     this.onClose,
     // View
     this.showBinder = true,
@@ -110,6 +124,9 @@ class AppMenuBar extends StatelessWidget {
             _buildViewModeToggle(context),
           ],
           const Spacer(),
+          // Mode indicator
+          _buildModeIndicator(context),
+          const SizedBox(width: 8),
           // Switch to simplified toolbar option
           if (onSwitchToSimplifiedToolbar != null)
             TextButton.icon(
@@ -167,17 +184,91 @@ class AppMenuBar extends StatelessWidget {
     );
   }
 
+  Widget _buildModeIndicator(BuildContext context) {
+    final isScrivenerMode = projectMode == ProjectMode.scrivener;
+
+    return Tooltip(
+      message: isScrivenerMode
+          ? 'Scrivener Mode: Only text editing allowed to preserve project integrity'
+          : 'Writr Mode: Full editing capabilities',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: isScrivenerMode
+              ? Colors.amber.withValues(alpha: 0.2)
+              : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isScrivenerMode
+                ? Colors.amber.shade700
+                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isScrivenerMode ? Icons.lock_outline : Icons.edit_note,
+              size: 12,
+              color: isScrivenerMode
+                  ? Colors.amber.shade800
+                  : Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              isScrivenerMode ? 'Scrivener' : 'Writr',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: isScrivenerMode
+                    ? Colors.amber.shade800
+                    : Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildFileMenu(BuildContext context) {
     return _MenuBarButton(
       label: 'File',
       items: [
+        _MenuItem(
+          icon: Icons.create_new_folder,
+          label: 'New Project...',
+          shortcut: 'Ctrl+N',
+          onTap: onNewProject,
+        ),
+        _MenuItem(
+          icon: Icons.folder_open,
+          label: 'Open Project...',
+          shortcut: 'Ctrl+O',
+          onTap: onOpenProject,
+        ),
+        const _MenuDivider(),
         _MenuItem(
           icon: Icons.save,
           label: 'Save',
           shortcut: 'Ctrl+S',
           onTap: onSave,
         ),
+        _MenuItem(
+          icon: Icons.save_as,
+          label: 'Save As...',
+          shortcut: 'Ctrl+Shift+S',
+          onTap: onSaveAs,
+        ),
         const _MenuDivider(),
+        if (projectMode == ProjectMode.scrivener)
+          _MenuItem(
+            icon: Icons.transform,
+            label: 'Convert to Writr Format...',
+            onTap: onConvertToWritr,
+          ),
+        if (projectMode == ProjectMode.scrivener)
+          const _MenuDivider(),
         _MenuItem(
           icon: Icons.download,
           label: 'Export Project...',

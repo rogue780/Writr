@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/scrivener_project.dart';
 import '../models/document_metadata.dart';
 import '../models/snapshot.dart';
+import '../services/scrivener_service.dart';
 import 'snapshot_viewer.dart';
 import 'diff_viewer.dart';
 
@@ -18,6 +19,7 @@ class InspectorPanel extends StatefulWidget {
   final bool isPinned;
   final VoidCallback? onTogglePinned;
   final VoidCallback? onClose;
+  final ProjectMode projectMode;
 
   const InspectorPanel({
     super.key,
@@ -32,7 +34,10 @@ class InspectorPanel extends StatefulWidget {
     this.isPinned = false,
     this.onTogglePinned,
     this.onClose,
+    this.projectMode = ProjectMode.native,
   });
+
+  bool get isScrivenerMode => projectMode == ProjectMode.scrivener;
 
   @override
   State<InspectorPanel> createState() => _InspectorPanelState();
@@ -125,9 +130,15 @@ class _InspectorPanelState extends State<InspectorPanel>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: widget.isScrivenerMode
+            ? Colors.amber.withValues(alpha: 0.1)
+            : Theme.of(context).colorScheme.surfaceContainerHighest,
         border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor),
+          bottom: BorderSide(
+            color: widget.isScrivenerMode
+                ? Colors.amber.shade300
+                : Theme.of(context).dividerColor,
+          ),
         ),
       ),
       child: Row(
@@ -142,7 +153,11 @@ class _InspectorPanelState extends State<InspectorPanel>
             ),
             const SizedBox(width: 8),
           ],
-          const Icon(Icons.info_outline, size: 20),
+          Icon(
+            widget.isScrivenerMode ? Icons.lock_outline : Icons.info_outline,
+            size: 20,
+            color: widget.isScrivenerMode ? Colors.amber.shade700 : null,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -151,6 +166,17 @@ class _InspectorPanelState extends State<InspectorPanel>
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (widget.isScrivenerMode) ...[
+            Tooltip(
+              message: 'Metadata changes are stored locally\n(not saved to .scriv project)',
+              child: Icon(
+                Icons.cloud_off,
+                size: 16,
+                color: Colors.amber.shade700,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           if (widget.onTogglePinned != null) ...[
             IconButton(
               icon: Icon(

@@ -9,6 +9,15 @@ import '../models/snapshot.dart';
 import '../models/research_item.dart';
 import '../utils/rtf_parser.dart';
 
+/// Project format mode - determines what operations are allowed.
+enum ProjectMode {
+  /// Native Writr format (.writ/.writx) - full read/write access
+  native,
+
+  /// Imported Scrivener project (.scriv/.scrivx) - RTF-only writes to prevent corruption
+  scrivener,
+}
+
 class ScrivenerService extends ChangeNotifier {
   ScrivenerProject? _currentProject;
   bool _isLoading = false;
@@ -29,10 +38,28 @@ class ScrivenerService extends ChangeNotifier {
   bool _allowScrivxRewrite = false;
   bool _scrivxDirty = false;
 
+  // Project mode - determines what operations are allowed.
+  ProjectMode _projectMode = ProjectMode.native;
+
   ScrivenerProject? get currentProject => _currentProject;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get hasUnsavedChanges => _hasUnsavedChanges;
+  ProjectMode get projectMode => _projectMode;
+  bool get isScrivenerMode => _projectMode == ProjectMode.scrivener;
+
+  /// Throws [StateError] if in Scrivener mode - used to block structural changes.
+  ///
+  /// In Scrivener mode, only text content edits are allowed to prevent
+  /// corrupting imported Scrivener projects.
+  void _ensureNotScrivenerMode(String operation) {
+    if (_projectMode == ProjectMode.scrivener) {
+      throw StateError(
+        'Cannot $operation in Scrivener-compatible mode. '
+        'Convert to Writr format (.writ) to make structural changes.',
+      );
+    }
+  }
 
   /// Set a callback for auto-save (used by web storage)
   void setAutoSaveCallback(Function callback) {
@@ -50,6 +77,7 @@ class ScrivenerService extends ChangeNotifier {
     _loadedScrivxPath = null;
     _allowScrivxRewrite = false;
     _scrivxDirty = false;
+    _projectMode = ProjectMode.scrivener; // Imported Scrivener project - restricted mode
     notifyListeners();
 
     try {
@@ -99,7 +127,10 @@ class ScrivenerService extends ChangeNotifier {
   }
 
   /// Set a project directly (useful for web platform)
-  void setProject(ScrivenerProject project) {
+  ///
+  /// By default, sets mode to [ProjectMode.scrivener] for imported projects.
+  /// Pass [mode] explicitly to override (e.g., for native .writ projects).
+  void setProject(ScrivenerProject project, {ProjectMode? mode}) {
     _currentProject = project;
     _error = null;
     _hasUnsavedChanges = false;
@@ -109,6 +140,7 @@ class ScrivenerService extends ChangeNotifier {
     _rtfPatchErrorsById.clear();
     _loadedScrivxPath = null;
     _scrivxDirty = false;
+    _projectMode = mode ?? ProjectMode.scrivener; // Default to scrivener mode for imports
     notifyListeners();
   }
 
@@ -439,6 +471,16 @@ class ScrivenerService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // In Scrivener mode, ONLY save RTF content changes - nothing else
+      if (_projectMode == ProjectMode.scrivener) {
+        await _saveRtfContentChangesOnly();
+        _isLoading = false;
+        _hasUnsavedChanges = false;
+        notifyListeners();
+        return;
+      }
+
+      // Native mode: full save
       if (_rtfPatchErrorsById.isNotEmpty) {
         final ids = _rtfPatchErrorsById.keys.take(3).join(', ');
         throw Exception(
@@ -476,12 +518,45 @@ class ScrivenerService extends ChangeNotifier {
 
       _isLoading = false;
       _dirtyRtfIds.clear();
+      _hasUnsavedChanges = false;
       notifyListeners();
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Save only modified RTF content in Scrivener mode.
+  ///
+  /// This is the restricted save for imported Scrivener projects. It ONLY writes
+  /// RTF files that have been modified, preserving all other files in the project.
+  Future<void> _saveRtfContentChangesOnly() async {
+    if (_currentProject == null) return;
+
+    // Check for RTF patching errors first
+    if (_rtfPatchErrorsById.isNotEmpty) {
+      final ids = _rtfPatchErrorsById.keys.take(3).join(', ');
+      throw Exception(
+        'Cannot save: one or more documents could not be updated without losing '
+        'Scrivener formatting (e.g. $ids). These documents have been skipped.',
+      );
+    }
+
+    // Only write files that are marked as dirty
+    for (final itemId in _dirtyRtfIds) {
+      final filePath = _contentFilePathById[itemId];
+      if (filePath == null) continue;
+
+      final rtfContent = _rtfContentsById[itemId];
+      if (rtfContent == null) continue;
+
+      final file = File(filePath);
+      await file.writeAsString(rtfContent);
+      debugPrint('Scrivener mode: saved RTF changes to $filePath');
+    }
+
+    _dirtyRtfIds.clear();
   }
 
   /// Save text contents to Files/Data directory
@@ -674,6 +749,7 @@ class ScrivenerService extends ChangeNotifier {
       _loadedScrivxPath = path.join(projectDir.path, '$name.scrivx');
       _allowScrivxRewrite = true;
       _scrivxDirty = true;
+      _projectMode = ProjectMode.native; // New projects are native - full access
 
       // Save initial project structure
       await saveProject();
@@ -738,8 +814,11 @@ class ScrivenerService extends ChangeNotifier {
   }
 
   /// Update metadata for a document
+  ///
+  /// Throws [StateError] in Scrivener mode - metadata changes are not allowed.
   void updateDocumentMetadata(String documentId, DocumentMetadata metadata) {
     if (_currentProject == null) return;
+    _ensureNotScrivenerMode('modify document metadata');
 
     final updatedMetadata =
         Map<String, DocumentMetadata>.from(_currentProject!.documentMetadata);
@@ -834,12 +913,15 @@ class ScrivenerService extends ChangeNotifier {
   }
 
   /// Add a new binder item (folder or document)
+  ///
+  /// Throws [StateError] in Scrivener mode - structural changes are not allowed.
   void addBinderItem({
     required String title,
     required BinderItemType type,
     String? parentId,
   }) {
     if (_currentProject == null) return;
+    _ensureNotScrivenerMode('add documents or folders');
     _scrivxDirty = true;
 
     final newItem = BinderItem(
@@ -882,8 +964,11 @@ class ScrivenerService extends ChangeNotifier {
   }
 
   /// Rename a binder item
+  ///
+  /// Throws [StateError] in Scrivener mode - structural changes are not allowed.
   void renameBinderItem(String itemId, String newTitle) {
     if (_currentProject == null) return;
+    _ensureNotScrivenerMode('rename documents or folders');
     _scrivxDirty = true;
 
     final updatedItems = _renameItemRecursive(
@@ -912,8 +997,11 @@ class ScrivenerService extends ChangeNotifier {
   }
 
   /// Delete a binder item
+  ///
+  /// Throws [StateError] in Scrivener mode - structural changes are not allowed.
   void deleteBinderItem(String itemId) {
     if (_currentProject == null) return;
+    _ensureNotScrivenerMode('delete documents or folders');
     _scrivxDirty = true;
 
     final updatedItems = _deleteItemRecursive(
@@ -1058,8 +1146,11 @@ class ScrivenerService extends ChangeNotifier {
   }
 
   /// Add a research item and create corresponding binder item
+  ///
+  /// Throws [StateError] in Scrivener mode - structural changes are not allowed.
   void addResearchItem(ResearchItem item, {String? parentFolderId}) {
     if (_currentProject == null) return;
+    _ensureNotScrivenerMode('add research items');
     _scrivxDirty = true;
 
     // Determine the correct binder item type based on research type
@@ -1127,8 +1218,11 @@ class ScrivenerService extends ChangeNotifier {
   }
 
   /// Delete a research item and its binder entry
+  ///
+  /// Throws [StateError] in Scrivener mode - structural changes are not allowed.
   void deleteResearchItem(String itemId) {
     if (_currentProject == null) return;
+    _ensureNotScrivenerMode('delete research items');
     _scrivxDirty = true;
 
     // Remove binder item

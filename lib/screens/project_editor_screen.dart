@@ -43,6 +43,7 @@ import 'template_selector_screen.dart';
 import '../widgets/keyword_selector.dart';
 import '../widgets/custom_metadata_editor.dart';
 import '../widgets/linguistic_overlay.dart';
+import '../services/project_converter.dart';
 
 class ProjectEditorScreen extends StatefulWidget {
   const ProjectEditorScreen({super.key});
@@ -124,6 +125,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                   bottom: false,
                   child: toolbarStyle == ToolbarStyle.menuBar
                       ? AppMenuBar(
+                          projectMode: service.projectMode,
                           showBinder: useMobileUi ? _pinBinderOnMobile : _showBinder,
                           showInspector:
                               useMobileUi ? _pinInspectorOnMobile : _showInspector,
@@ -132,9 +134,15 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                           viewMode: _viewMode,
                           splitEditorEnabled: _splitEditorState.isSplitEnabled,
                           onSave: _saveProject,
+                          onSaveAs: () => _saveProjectAs(service),
+                          onOpenProject: () => _openProject(service),
+                          onNewProject: () => _newProject(service),
                           onExport: kIsWeb ? _exportProject : null,
                           onImport: kIsWeb ? _importProject : null,
                           onBackups: () => _openBackupManager(service),
+                          onConvertToWritr: service.isScrivenerMode
+                              ? () => _convertToWritr(service)
+                              : null,
                           onClose: () => Navigator.pop(context),
                           onToggleBinder: () {
                             if (useMobileUi) {
@@ -196,6 +204,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                       : SimplifiedToolbar(
                           projectName: projectName,
                           hasUnsavedChanges: hasUnsavedChanges,
+                          projectMode: service.projectMode,
                           viewMode: _viewMode,
                           showBinder: useMobileUi ? _pinBinderOnMobile : _showBinder,
                           showInspector:
@@ -244,9 +253,15 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                           onToggleSplitEditor:
                               useMobileUi ? null : _toggleSplitEditor,
                           onSave: _saveProject,
+                          onSaveAs: () => _saveProjectAs(service),
+                          onOpenProject: () => _openProject(service),
+                          onNewProject: () => _newProject(service),
                           onExport: kIsWeb ? _exportProject : null,
                           onImport: kIsWeb ? _importProject : null,
                           onBackups: () => _openBackupManager(service),
+                          onConvertToWritr: service.isScrivenerMode
+                              ? () => _convertToWritr(service)
+                              : null,
                           onCompile: service.currentProject != null
                               ? () => _openCompileScreen(service.currentProject!)
                               : null,
@@ -404,6 +419,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                 _closeOpenDrawerIfAny();
               },
               selectedItem: _selectedItem,
+              projectMode: service.projectMode,
             ),
           ),
         ],
@@ -467,6 +483,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
           _closeOpenDrawerIfAny();
         },
         onClose: _closeOpenDrawerIfAny,
+        projectMode: service.projectMode,
       ),
     );
   }
@@ -690,6 +707,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
       },
       selectedItem: _selectedItem,
       onClose: useMobileUi ? null : () => setState(() => _showBinder = false),
+      projectMode: service.projectMode,
     );
 
     if (!showHeader) {
@@ -823,6 +841,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
           }
         });
       },
+      projectMode: service.projectMode,
     );
   }
 
@@ -1325,32 +1344,36 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         onSelect: (template) {
           Navigator.pop(context);
 
-          // Add the document to the project
-          service.addBinderItem(
-            title: template.name,
-            type: BinderItemType.text,
-            parentId: _selectedFolder?.id,
-          );
+          try {
+            // Add the document to the project
+            service.addBinderItem(
+              title: template.name,
+              type: BinderItemType.text,
+              parentId: _selectedFolder?.id,
+            );
 
-          // Find the newly added item (last item with this title)
-          final newItem = _findBinderItemByTitle(
-            service.currentProject!.binderItems,
-            template.name,
-          );
+            // Find the newly added item (last item with this title)
+            final newItem = _findBinderItemByTitle(
+              service.currentProject!.binderItems,
+              template.name,
+            );
 
-          // Set the content from template
-          if (newItem != null) {
-            service.updateTextContent(newItem.id, template.content);
+            // Set the content from template
+            if (newItem != null) {
+              service.updateTextContent(newItem.id, template.content);
 
-            // Select the new document
-            setState(() {
-              _selectedItem = newItem;
-            });
+              // Select the new document
+              setState(() {
+                _selectedItem = newItem;
+              });
+            }
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Created "${template.name}" from template')),
+            );
+          } on StateError catch (e) {
+            _showScrivenerModeError(e.message);
           }
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Created "${template.name}" from template')),
-          );
         },
       ),
     );
@@ -1393,6 +1416,62 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
       builder: (context) => LinguisticAnalysisDialog(
         text: content,
         documentTitle: _selectedItem!.title,
+      ),
+    );
+  }
+
+  void _showScrivenerModeError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.lock_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(message),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.amber.shade800,
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'Learn More',
+          textColor: Colors.white,
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Scrivener Mode'),
+                content: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'This project is opened in Scrivener-compatible mode to protect your original .scriv project from corruption.',
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'In this mode, you can:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text('• Edit document text'),
+                    Text('• Create and restore snapshots'),
+                    SizedBox(height: 12),
+                    Text(
+                      'To make structural changes (add/delete/rename), convert to Writr format using File → Convert to Writr Format.',
+                    ),
+                  ],
+                ),
+                actions: [
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Got it'),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -1557,6 +1636,372 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _openProject(ScrivenerService service) async {
+    if (kIsWeb) {
+      // Web uses import flow
+      await _importProject();
+      return;
+    }
+
+    try {
+      final result = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Select Project Folder',
+      );
+
+      if (result == null) return;
+
+      // Detect project format
+      final format = await detectProjectFormat(result);
+
+      if (format == ProjectFormat.unknown) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Unknown project format. Please select a .scriv or .writ folder.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show loading
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Load project based on format
+      if (format == ProjectFormat.scrivener) {
+        await service.loadProject(result);
+      } else {
+        // TODO: Load .writ project using WritrService
+        // For now, show not yet implemented message
+        if (mounted) {
+          Navigator.pop(context); // Close loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Native Writr format loading coming soon!'),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading
+
+      if (service.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening project: ${service.error}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } else {
+        // Clear selection when loading new project
+        setState(() {
+          _selectedItem = null;
+          _selectedFolder = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening project: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _newProject(ScrivenerService service) async {
+    // Show dialog to get project name
+    final projectName = await showDialog<String>(
+      context: context,
+      builder: (context) => _NewProjectDialog(),
+    );
+
+    if (projectName == null || projectName.isEmpty) return;
+
+    if (kIsWeb) {
+      // For web, create in-memory project
+      final project = ScrivenerProject(
+        name: projectName,
+        path: '',
+        binderItems: [
+          BinderItem(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            title: 'Manuscript',
+            type: BinderItemType.folder,
+            children: [
+              BinderItem(
+                id: '${DateTime.now().millisecondsSinceEpoch}_1',
+                title: 'Chapter 1',
+                type: BinderItemType.text,
+                children: [],
+              ),
+            ],
+          ),
+        ],
+        textContents: {
+          '${DateTime.now().millisecondsSinceEpoch}_1': '',
+        },
+        researchItems: {},
+        settings: ProjectSettings.defaults(),
+      );
+      service.setProject(project, mode: ProjectMode.native);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Created new project: $projectName'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } else {
+      // For desktop, let user choose location
+      final outputDir = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Choose location for new project',
+      );
+
+      if (outputDir == null) return;
+
+      // TODO: Create .writ project structure
+      // For now, show not yet implemented
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Native Writr project creation coming soon!'),
+            backgroundColor: Colors.blue,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveProjectAs(ScrivenerService service) async {
+    if (service.currentProject == null) return;
+
+    if (kIsWeb) {
+      // On web, Save As is the same as Export
+      await _exportProject();
+      return;
+    }
+
+    // For desktop, let user choose new location
+    final outputDir = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Save project to...',
+    );
+
+    if (outputDir == null) return;
+
+    // TODO: Implement Save As with project copy
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Save As functionality coming soon!'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+    }
+  }
+
+  Future<void> _convertToWritr(ScrivenerService service) async {
+    if (service.currentProject == null || !service.isScrivenerMode) return;
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Convert to Writr Format'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This will create a copy of your project in Writr\'s native format (.writ).',
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Benefits of Writr format:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text('• Full editing capabilities (add/delete/rename documents)'),
+            Text('• Markdown-based content (Git-friendly)'),
+            Text('• No risk of Scrivener project corruption'),
+            SizedBox(height: 12),
+            Text(
+              'Your original Scrivener project will not be modified.',
+              style: TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Convert'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    if (kIsWeb) {
+      // On web, export as .writ zip
+      // TODO: Implement web conversion
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Web conversion coming soon!'),
+            backgroundColor: Colors.blue,
+          ),
+        );
+      }
+      return;
+    }
+
+    // For desktop, let user choose output location
+    final outputDir = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Choose location for converted project',
+    );
+
+    if (outputDir == null) return;
+
+    // Show loading
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final converter = ProjectConverter();
+      final writrPath = await converter.scrivenerToWritr(
+        scrivenerProject: service.currentProject!,
+        outputDirectory: outputDir,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Project converted successfully to: $writrPath'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+
+      // Ask if user wants to open the converted project
+      final openConverted = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Conversion Complete'),
+          content: const Text('Would you like to open the converted Writr project?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Stay Here'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Open Converted'),
+            ),
+          ],
+        ),
+      );
+
+      if (openConverted == true) {
+        // TODO: Load the converted .writ project
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Opening converted projects coming soon!'),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Conversion failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+}
+
+/// Dialog for creating a new project
+class _NewProjectDialog extends StatefulWidget {
+  @override
+  State<_NewProjectDialog> createState() => _NewProjectDialogState();
+}
+
+class _NewProjectDialogState extends State<_NewProjectDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('New Project'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: 'Project Name',
+          hintText: 'My Novel',
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Create'),
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    final name = _controller.text.trim();
+    if (name.isNotEmpty) {
+      Navigator.pop(context, name);
     }
   }
 }
