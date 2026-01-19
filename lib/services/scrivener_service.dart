@@ -17,6 +17,18 @@ class ScrivenerService extends ChangeNotifier {
   bool _hasUnsavedChanges = false;
   Function? _onAutoSave; // Callback for web storage auto-save
 
+  // RTF round-tripping support (to preserve Scrivener formatting).
+  final Map<String, String> _rtfContentsById = {};
+  final Map<String, String> _contentFilePathById = {};
+  final Set<String> _dirtyRtfIds = {};
+  final Map<String, String> _rtfPatchErrorsById = {};
+
+  // When we load an existing Scrivener project, avoid rewriting the `.scrivx`
+  // unless we can do so without losing metadata.
+  String? _loadedScrivxPath;
+  bool _allowScrivxRewrite = false;
+  bool _scrivxDirty = false;
+
   ScrivenerProject? get currentProject => _currentProject;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -31,6 +43,13 @@ class ScrivenerService extends ChangeNotifier {
   Future<void> loadProject(String projectPath) async {
     _isLoading = true;
     _error = null;
+    _rtfContentsById.clear();
+    _contentFilePathById.clear();
+    _dirtyRtfIds.clear();
+    _rtfPatchErrorsById.clear();
+    _loadedScrivxPath = null;
+    _allowScrivxRewrite = false;
+    _scrivxDirty = false;
     notifyListeners();
 
     try {
@@ -44,6 +63,7 @@ class ScrivenerService extends ChangeNotifier {
       if (scrivxFile == null) {
         throw Exception('No .scrivx file found in project');
       }
+      _loadedScrivxPath = scrivxFile.path;
 
       // Parse the .scrivx XML file
       final xmlContent = await scrivxFile.readAsString();
@@ -79,6 +99,12 @@ class ScrivenerService extends ChangeNotifier {
     _currentProject = project;
     _error = null;
     _hasUnsavedChanges = false;
+    _rtfContentsById.clear();
+    _contentFilePathById.clear();
+    _dirtyRtfIds.clear();
+    _rtfPatchErrorsById.clear();
+    _loadedScrivxPath = null;
+    _scrivxDirty = false;
     notifyListeners();
   }
 
@@ -238,6 +264,10 @@ class ScrivenerService extends ChangeNotifier {
           final rawContent = await entity.readAsString();
           final content = fileName.endsWith('.rtf') ? rtfToPlainText(rawContent) : rawContent;
           textContents[fileId] = content;
+          _contentFilePathById[fileId] = entity.path;
+          if (fileName.endsWith('.rtf')) {
+            _rtfContentsById[fileId] = rawContent;
+          }
           debugPrint('Loaded content for ID: $fileId from ${entity.path}');
           debugPrint('  Raw content length: ${rawContent.length}, Plain text length: ${content.length}');
         } catch (e) {
@@ -259,15 +289,40 @@ class ScrivenerService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      if (_rtfPatchErrorsById.isNotEmpty) {
+        final ids = _rtfPatchErrorsById.keys.take(3).join(', ');
+        throw Exception(
+          'Cannot save: one or more documents could not be updated without losing Scrivener formatting (e.g. $ids).',
+        );
+      }
+
       final projectDir = Directory(_currentProject!.path);
 
       // Save text contents to Files/Data directory
       await _saveTextContents(projectDir, _currentProject!.textContents);
 
-      // Generate and save .scrivx XML file
-      await _saveScrivxFile(projectDir, _currentProject!);
+      // Preserve existing .scrivx files unless we can update them safely.
+      final scrivxPath = _loadedScrivxPath ??
+          path.join(projectDir.path, '${_currentProject!.name}.scrivx');
+      final scrivxExists = await File(scrivxPath).exists();
+      if (!scrivxExists) {
+        await _saveScrivxFile(projectDir, _currentProject!);
+        _loadedScrivxPath = scrivxPath;
+        _allowScrivxRewrite = true;
+        _scrivxDirty = false;
+      } else if (_scrivxDirty) {
+        if (_allowScrivxRewrite) {
+          await _saveScrivxFile(projectDir, _currentProject!);
+          _scrivxDirty = false;
+        } else {
+          throw Exception(
+            'Saving binder changes back to an existing Scrivener project is not supported yet (would risk losing .scrivx metadata).',
+          );
+        }
+      }
 
       _isLoading = false;
+      _dirtyRtfIds.clear();
       notifyListeners();
     } catch (e) {
       _error = e.toString();
@@ -285,12 +340,33 @@ class ScrivenerService extends ChangeNotifier {
     await dataDir.create(recursive: true);
 
     for (final entry in textContents.entries) {
-      final scrivenerDir = Directory(path.join(dataDir.path, entry.key));
-      final file = (await scrivenerDir.exists())
-          ? File(path.join(scrivenerDir.path, 'content.rtf'))
-          : File(path.join(dataDir.path, '${entry.key}.rtf'));
+      final existingPath = _contentFilePathById[entry.key];
+      final File file;
+      if (existingPath != null) {
+        file = File(existingPath);
+      } else {
+        final scrivenerDir = Directory(path.join(dataDir.path, entry.key));
+        file = (await scrivenerDir.exists())
+            ? File(path.join(scrivenerDir.path, 'content.rtf'))
+            : File(path.join(dataDir.path, '${entry.key}.rtf'));
+      }
+
+      final shouldWrite =
+          _dirtyRtfIds.contains(entry.key) ? true : !await file.exists();
+      if (!shouldWrite) {
+        continue;
+      }
+
       await file.parent.create(recursive: true);
-      await file.writeAsString(plainTextToRtf(entry.value));
+
+      if (file.path.toLowerCase().endsWith('.rtf')) {
+        final rtf = _rtfContentsById[entry.key] ?? plainTextToRtf(entry.value);
+        await file.writeAsString(rtf);
+      } else {
+        await file.writeAsString(entry.value);
+      }
+
+      _contentFilePathById[entry.key] = file.path;
     }
   }
 
@@ -376,6 +452,9 @@ class ScrivenerService extends ChangeNotifier {
 
       // Create empty project
       _currentProject = ScrivenerProject.empty(name, projectPath);
+      _loadedScrivxPath = path.join(projectDir.path, '$name.scrivx');
+      _allowScrivxRewrite = true;
+      _scrivxDirty = true;
 
       // Save initial project structure
       await saveProject();
@@ -392,6 +471,28 @@ class ScrivenerService extends ChangeNotifier {
   /// Update text content for a binder item
   void updateTextContent(String itemId, String content) {
     if (_currentProject == null) return;
+
+    final currentPath = _contentFilePathById[itemId];
+    final isRtf = (currentPath?.toLowerCase().endsWith('.rtf') ?? false) ||
+        _rtfContentsById.containsKey(itemId);
+
+    if (isRtf) {
+      final baseRtf = _rtfContentsById[itemId] ??
+          plainTextToRtf(_currentProject!.textContents[itemId] ?? '');
+      try {
+        final updatedRtf = updateRtfPlainTextPreservingFormatting(
+          rtfContent: baseRtf,
+          plainText: content,
+        );
+        if (updatedRtf != baseRtf) {
+          _rtfContentsById[itemId] = updatedRtf;
+          _dirtyRtfIds.add(itemId);
+        }
+        _rtfPatchErrorsById.remove(itemId);
+      } catch (e) {
+        _rtfPatchErrorsById[itemId] = e.toString();
+      }
+    }
 
     final updatedContents =
         Map<String, String>.from(_currentProject!.textContents);
@@ -512,6 +613,7 @@ class ScrivenerService extends ChangeNotifier {
     String? parentId,
   }) {
     if (_currentProject == null) return;
+    _scrivxDirty = true;
 
     final newItem = BinderItem(
       id: _generateUniqueId(),
@@ -547,6 +649,7 @@ class ScrivenerService extends ChangeNotifier {
   /// Rename a binder item
   void renameBinderItem(String itemId, String newTitle) {
     if (_currentProject == null) return;
+    _scrivxDirty = true;
 
     final updatedItems = _renameItemRecursive(
       _currentProject!.binderItems,
@@ -568,6 +671,7 @@ class ScrivenerService extends ChangeNotifier {
   /// Delete a binder item
   void deleteBinderItem(String itemId) {
     if (_currentProject == null) return;
+    _scrivxDirty = true;
 
     final updatedItems = _deleteItemRecursive(
       _currentProject!.binderItems,
