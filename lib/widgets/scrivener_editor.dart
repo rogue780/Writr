@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:super_editor/super_editor.dart';
 import '../models/rtf_metadata.dart';
 import '../models/scrivener_project.dart';
@@ -37,10 +36,10 @@ class ScrivenerEditor extends StatefulWidget {
   });
 
   @override
-  State<ScrivenerEditor> createState() => _ScrivenerEditorState();
+  State<ScrivenerEditor> createState() => ScrivenerEditorState();
 }
 
-class _ScrivenerEditorState extends State<ScrivenerEditor> {
+class ScrivenerEditorState extends State<ScrivenerEditor> {
   late MutableDocument _document;
   late MutableDocumentComposer _composer;
   late Editor _editor;
@@ -52,8 +51,8 @@ class _ScrivenerEditorState extends State<ScrivenerEditor> {
   late final SuperEditorIosControlsController _iosControlsController;
 
   // Undo/redo history
-  final List<String> _undoStack = [];
-  final List<String> _redoStack = [];
+  final List<String> undoStack = [];
+  final List<String> redoStack = [];
   String _lastSavedContent = '';
 
   RtfMetadata _rtfMetadata = RtfMetadata.empty();
@@ -86,8 +85,8 @@ class _ScrivenerEditorState extends State<ScrivenerEditor> {
     _isInitializing = true;
 
     // Clear history when loading new document
-    _undoStack.clear();
-    _redoStack.clear();
+    undoStack.clear();
+    redoStack.clear();
 
     // Convert RTF to AttributedText with formatting
     final converter = RtfToAttributedText(widget.rtfContent);
@@ -186,11 +185,11 @@ class _ScrivenerEditorState extends State<ScrivenerEditor> {
 
     // Track history for undo (but not if this change came from undo/redo)
     if (!_isUndoRedoOperation && _lastSavedContent != rtfContent) {
-      _undoStack.add(_lastSavedContent);
-      _redoStack.clear(); // Clear redo stack on new change
+      undoStack.add(_lastSavedContent);
+      redoStack.clear(); // Clear redo stack on new change
       // Limit undo stack size
-      if (_undoStack.length > 100) {
-        _undoStack.removeAt(0);
+      if (undoStack.length > 100) {
+        undoStack.removeAt(0);
       }
       _lastSavedContent = rtfContent;
     }
@@ -203,29 +202,31 @@ class _ScrivenerEditorState extends State<ScrivenerEditor> {
     widget.onDocumentChanged?.call(_document);
   }
 
-  bool get canUndo => _undoStack.isNotEmpty;
-  bool get canRedo => _redoStack.isNotEmpty;
+  bool get canUndo => undoStack.isNotEmpty;
+  bool get canRedo => redoStack.isNotEmpty;
 
-  void _undo() {
+  /// Public method to perform undo - can be called from parent widget
+  void undo() {
     if (!canUndo) return;
 
     final currentContent = _getCurrentRtfContent();
-    _redoStack.add(currentContent);
+    redoStack.add(currentContent);
 
-    final previousContent = _undoStack.removeLast();
+    final previousContent = undoStack.removeLast();
     _loadContentWithoutHistory(previousContent);
     _lastSavedContent = previousContent;
 
     widget.onContentChanged(previousContent);
   }
 
-  void _redo() {
+  /// Public method to perform redo - can be called from parent widget
+  void redo() {
     if (!canRedo) return;
 
     final currentContent = _getCurrentRtfContent();
-    _undoStack.add(currentContent);
+    undoStack.add(currentContent);
 
-    final nextContent = _redoStack.removeLast();
+    final nextContent = redoStack.removeLast();
     _loadContentWithoutHistory(nextContent);
     _lastSavedContent = nextContent;
 
@@ -275,58 +276,26 @@ class _ScrivenerEditorState extends State<ScrivenerEditor> {
     setState(() {});
   }
 
-  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-
-    final isControlPressed = HardwareKeyboard.instance.isControlPressed;
-    final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
-
-    // Ctrl+Z = Undo
-    if (isControlPressed && !isShiftPressed && event.logicalKey == LogicalKeyboardKey.keyZ) {
-      if (canUndo) {
-        _undo();
-        return KeyEventResult.handled;
-      }
-    }
-
-    // Ctrl+Y or Ctrl+Shift+Z = Redo
-    if (isControlPressed && event.logicalKey == LogicalKeyboardKey.keyY) {
-      if (canRedo) {
-        _redo();
-        return KeyEventResult.handled;
-      }
-    }
-    if (isControlPressed && isShiftPressed && event.logicalKey == LogicalKeyboardKey.keyZ) {
-      if (canRedo) {
-        _redo();
-        return KeyEventResult.handled;
-      }
-    }
-
-    return KeyEventResult.ignored;
-  }
-
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Focus(
-      onKeyEvent: _handleKeyEvent,
-      child: Container(
-        color: colorScheme.surface,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildHeader(context),
-            if (widget.item.type == BinderItemType.text) _buildToolbar(context),
-            Expanded(
-              child: widget.item.type == BinderItemType.text
-                  ? _buildEditor(context)
-                  : _buildNonEditableView(context),
-            ),
-            if (widget.item.type == BinderItemType.text) _buildStatusBar(context),
-          ],
-        ),
+    // Keyboard shortcuts (Ctrl+Z, Ctrl+Y) are handled at the parent level
+    // via CallbackShortcuts in project_editor_screen.dart
+    return Container(
+      color: colorScheme.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildHeader(context),
+          if (widget.item.type == BinderItemType.text) _buildToolbar(context),
+          Expanded(
+            child: widget.item.type == BinderItemType.text
+                ? _buildEditor(context)
+                : _buildNonEditableView(context),
+          ),
+          if (widget.item.type == BinderItemType.text) _buildStatusBar(context),
+        ],
       ),
     );
   }
@@ -418,7 +387,7 @@ class _ScrivenerEditorState extends State<ScrivenerEditor> {
               color: canUndo ? null : Theme.of(context).disabledColor,
             ),
             tooltip: 'Undo (Ctrl+Z)',
-            onPressed: canUndo ? _undo : null,
+            onPressed: canUndo ? undo : null,
           ),
           IconButton(
             icon: Icon(
@@ -427,7 +396,7 @@ class _ScrivenerEditorState extends State<ScrivenerEditor> {
               color: canRedo ? null : Theme.of(context).disabledColor,
             ),
             tooltip: 'Redo (Ctrl+Y)',
-            onPressed: canRedo ? _redo : null,
+            onPressed: canRedo ? redo : null,
           ),
           Container(
             width: 1,

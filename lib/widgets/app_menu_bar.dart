@@ -22,6 +22,10 @@ class AppMenuBar extends StatelessWidget {
   final VoidCallback? onConvertToWritr;
   final VoidCallback? onClose;
 
+  // Edit menu callbacks
+  final VoidCallback? onUndo;
+  final VoidCallback? onRedo;
+
   // View menu callbacks
   final bool showBinder;
   final bool showInspector;
@@ -71,6 +75,9 @@ class AppMenuBar extends StatelessWidget {
     this.onBackups,
     this.onConvertToWritr,
     this.onClose,
+    // Edit
+    this.onUndo,
+    this.onRedo,
     // View
     this.showBinder = true,
     this.showInspector = true,
@@ -340,17 +347,13 @@ class AppMenuBar extends StatelessWidget {
           icon: Icons.undo,
           label: 'Undo',
           shortcut: 'Ctrl+Z',
-          onTap: () {
-            // Handled by editor
-          },
+          onTap: onUndo,
         ),
         _MenuItem(
           icon: Icons.redo,
           label: 'Redo',
           shortcut: 'Ctrl+Y',
-          onTap: () {
-            // Handled by editor
-          },
+          onTap: onRedo,
         ),
         const _MenuDivider(),
         _MenuItem(

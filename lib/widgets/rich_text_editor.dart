@@ -46,10 +46,10 @@ class RichTextEditor extends StatefulWidget {
   });
 
   @override
-  State<RichTextEditor> createState() => _RichTextEditorState();
+  State<RichTextEditor> createState() => RichTextEditorState();
 }
 
-class _RichTextEditorState extends State<RichTextEditor> {
+class RichTextEditorState extends State<RichTextEditor> {
   late MutableDocument _document;
   late MutableDocumentComposer _composer;
   late Editor _editor;
@@ -64,6 +64,12 @@ class _RichTextEditorState extends State<RichTextEditor> {
   bool _isInitializing = true;
   String? _selectedCommentId;
   late bool _showCommentMargin;
+
+  // Undo/redo history
+  final List<String> _undoStack = [];
+  final List<String> _redoStack = [];
+  String _lastSavedContent = '';
+  static const int _maxHistorySize = 100;
 
   // Page view settings
   static const double _pageMaxWidth = 800.0;
@@ -95,6 +101,11 @@ class _RichTextEditorState extends State<RichTextEditor> {
     );
 
     _document.addListener(_onDocumentChangeLog);
+
+    // Initialize undo history with current content
+    _lastSavedContent = widget.content;
+    _undoStack.clear();
+    _redoStack.clear();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -176,15 +187,115 @@ class _RichTextEditorState extends State<RichTextEditor> {
   void _onDocumentChangeLog(DocumentChangeLog changeLog) {
     if (_isInitializing) return;
 
+    final newContent = widget.useMarkdown
+        ? markdownFromDocument(_document)
+        : _document.toPlainText();
+
+    // Track undo history - save the previous state before this change
+    if (_lastSavedContent != newContent) {
+      _undoStack.add(_lastSavedContent);
+      if (_undoStack.length > _maxHistorySize) {
+        _undoStack.removeAt(0);
+      }
+      // Clear redo stack when new changes are made
+      _redoStack.clear();
+      _lastSavedContent = newContent;
+    }
+
     setState(() {
       _hasUnsavedChanges = true;
     });
 
-    final newContent = widget.useMarkdown
-        ? markdownFromDocument(_document)
-        : _document.toPlainText();
     widget.onContentChanged(newContent);
     widget.onDocumentChanged?.call(_document);
+  }
+
+  /// Whether undo is available
+  bool get canUndo => _undoStack.isNotEmpty;
+
+  /// Whether redo is available
+  bool get canRedo => _redoStack.isNotEmpty;
+
+  /// Public method to perform undo - can be called from parent widget
+  void undo() {
+    if (!canUndo) return;
+
+    // Save current content to redo stack
+    final currentContent = widget.useMarkdown
+        ? markdownFromDocument(_document)
+        : _document.toPlainText();
+    _redoStack.add(currentContent);
+
+    // Get previous content from undo stack
+    final previousContent = _undoStack.removeLast();
+
+    // Load previous content without triggering history tracking
+    _loadContentWithoutHistory(previousContent);
+
+    // Update last saved content
+    _lastSavedContent = previousContent;
+
+    // Notify parent of content change
+    widget.onContentChanged(previousContent);
+  }
+
+  /// Public method to perform redo - can be called from parent widget
+  void redo() {
+    if (!canRedo) return;
+
+    // Save current content to undo stack
+    final currentContent = widget.useMarkdown
+        ? markdownFromDocument(_document)
+        : _document.toPlainText();
+    _undoStack.add(currentContent);
+
+    // Get next content from redo stack
+    final nextContent = _redoStack.removeLast();
+
+    // Load next content without triggering history tracking
+    _loadContentWithoutHistory(nextContent);
+
+    // Update last saved content
+    _lastSavedContent = nextContent;
+
+    // Notify parent of content change
+    widget.onContentChanged(nextContent);
+  }
+
+  /// Load content without adding to undo history
+  void _loadContentWithoutHistory(String content) {
+    _isInitializing = true;
+
+    // Remove listener before modifying document
+    _document.removeListener(_onDocumentChangeLog);
+
+    // Store old document/composer for deferred disposal
+    final oldDocument = _document;
+    final oldComposer = _composer;
+
+    // Create new document with the content
+    _document = _createDocumentFromContent(content);
+    _composer = MutableDocumentComposer();
+    _editor = createDefaultDocumentEditor(
+      document: _document,
+      composer: _composer,
+    );
+
+    // Re-add listener
+    _document.addListener(_onDocumentChangeLog);
+
+    _isInitializing = false;
+
+    setState(() {
+      _hasUnsavedChanges = true;
+    });
+
+    // Dispose old document/composer after the frame completes
+    // to avoid issues with focus handling
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      oldDocument.dispose();
+      oldComposer.dispose();
+    });
   }
 
   @override

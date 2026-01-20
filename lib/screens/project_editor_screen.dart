@@ -58,6 +58,8 @@ class ProjectEditorScreen extends StatefulWidget {
 
 class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _scrivenerEditorKey = GlobalKey<ScrivenerEditorState>();
+  final _richTextEditorKey = GlobalKey<RichTextEditorState>();
 
   BinderItem? _selectedItem;
   BinderItem? _selectedFolder; // For folder-based views
@@ -88,6 +90,61 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
   final CustomMetadataService _customMetadataService = CustomMetadataService();
 
   @override
+  void initState() {
+    super.initState();
+    // Register global keyboard handler to intercept shortcuts before SuperEditor
+    HardwareKeyboard.instance.addHandler(_handleGlobalKeyEvent);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleGlobalKeyEvent);
+    super.dispose();
+  }
+
+  /// Global keyboard handler that intercepts shortcuts before they reach widgets
+  bool _handleGlobalKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+
+    final isControlPressed = HardwareKeyboard.instance.isControlPressed;
+    final isMetaPressed = HardwareKeyboard.instance.isMetaPressed;
+    final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+    final isModifierPressed = isControlPressed || isMetaPressed;
+
+    if (!isModifierPressed) return false;
+
+    // Ctrl+Z / Cmd+Z - Undo (without Shift)
+    if (event.logicalKey == LogicalKeyboardKey.keyZ && !isShiftPressed) {
+      debugPrint('Global handler intercepted Ctrl+Z');
+      _performUndo();
+      return true; // Consume the event
+    }
+
+    // Ctrl+Shift+Z / Cmd+Shift+Z - Redo
+    if (event.logicalKey == LogicalKeyboardKey.keyZ && isShiftPressed) {
+      debugPrint('Global handler intercepted Ctrl+Shift+Z');
+      _performRedo();
+      return true;
+    }
+
+    // Ctrl+Y / Cmd+Y - Redo
+    if (event.logicalKey == LogicalKeyboardKey.keyY) {
+      debugPrint('Global handler intercepted Ctrl+Y');
+      _performRedo();
+      return true;
+    }
+
+    // Ctrl+S / Cmd+S - Save (without Shift)
+    if (event.logicalKey == LogicalKeyboardKey.keyS && !isShiftPressed) {
+      debugPrint('Global handler intercepted Ctrl+S');
+      _saveProject();
+      return true;
+    }
+
+    return false; // Don't consume - let other handlers process
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Consumer2<ScrivenerService, PreferencesService>(
       builder: (context, service, prefs, child) {
@@ -110,24 +167,8 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
 
         final colorScheme = Theme.of(context).colorScheme;
 
-        return CallbackShortcuts(
-          bindings: <ShortcutActivator, VoidCallback>{
-            const SingleActivator(LogicalKeyboardKey.keyS, control: true):
-                _saveProject,
-            const SingleActivator(LogicalKeyboardKey.keyS, meta: true):
-                _saveProject,
-            const SingleActivator(
-              LogicalKeyboardKey.keyS,
-              control: true,
-              shift: true,
-            ): () => _saveProjectAs(service),
-            const SingleActivator(
-              LogicalKeyboardKey.keyS,
-              meta: true,
-              shift: true,
-            ): () => _saveProjectAs(service),
-          },
-          child: Scaffold(
+        // Keyboard shortcuts are handled by _handleGlobalKeyEvent registered in initState
+        return Scaffold(
             key: _scaffoldKey,
             drawer: useMobileUi && hasProject && !_pinBinderOnMobile
                 ? Drawer(child: _buildMobileBinderDrawer(service))
@@ -171,6 +212,8 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                                 ? () => _convertToWritr(service)
                                 : null,
                             onClose: () => Navigator.pop(context),
+                            onUndo: _performUndo,
+                            onRedo: _performRedo,
                             onToggleBinder: () {
                               if (useMobileUi) {
                                 if (!hasProject) {
@@ -328,8 +371,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                 ),
               ],
             ),
-          ),
-        );
+          );
       },
     );
   }
@@ -982,6 +1024,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
     if (service.isScrivenerMode && service.hasRtfContent(_selectedItem!.id)) {
       final rtfContent = service.getRawRtfContent(_selectedItem!.id) ?? '';
       return ScrivenerEditor(
+        key: _scrivenerEditorKey,
         item: _selectedItem!,
         rtfContent: rtfContent,
         hasUnsavedChanges: service.hasUnsavedChanges,
@@ -1009,6 +1052,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
     final comments = _commentService.getCommentsForDocument(_selectedItem!.id);
 
     return RichTextEditor(
+      key: _richTextEditorKey,
       item: _selectedItem!,
       content: content,
       useMarkdown: useMarkdown,
@@ -1559,6 +1603,48 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         ),
       ),
     );
+  }
+
+  /// Perform undo on the current editor (works for both .writ and .scriv modes)
+  void _performUndo() {
+    debugPrint('_performUndo called');
+    debugPrint('  _scrivenerEditorKey.currentState: ${_scrivenerEditorKey.currentState}');
+    debugPrint('  _richTextEditorKey.currentState: ${_richTextEditorKey.currentState}');
+
+    // Try ScrivenerEditor first (for .scriv projects)
+    if (_scrivenerEditorKey.currentState != null) {
+      debugPrint('  Calling ScrivenerEditor.undo()');
+      _scrivenerEditorKey.currentState!.undo();
+      return;
+    }
+    // Fall back to RichTextEditor (for .writ projects)
+    if (_richTextEditorKey.currentState != null) {
+      debugPrint('  Calling RichTextEditor.undo()');
+      _richTextEditorKey.currentState!.undo();
+      return;
+    }
+    debugPrint('  No editor found!');
+  }
+
+  /// Perform redo on the current editor (works for both .writ and .scriv modes)
+  void _performRedo() {
+    debugPrint('_performRedo called');
+    debugPrint('  _scrivenerEditorKey.currentState: ${_scrivenerEditorKey.currentState}');
+    debugPrint('  _richTextEditorKey.currentState: ${_richTextEditorKey.currentState}');
+
+    // Try ScrivenerEditor first (for .scriv projects)
+    if (_scrivenerEditorKey.currentState != null) {
+      debugPrint('  Calling ScrivenerEditor.redo()');
+      _scrivenerEditorKey.currentState!.redo();
+      return;
+    }
+    // Fall back to RichTextEditor (for .writ projects)
+    if (_richTextEditorKey.currentState != null) {
+      debugPrint('  Calling RichTextEditor.redo()');
+      _richTextEditorKey.currentState!.redo();
+      return;
+    }
+    debugPrint('  No editor found!');
   }
 
   Future<void> _saveProject() async {
@@ -2366,3 +2452,4 @@ class _TargetsManagementDialogState extends State<_TargetsManagementDialog> {
     );
   }
 }
+
