@@ -99,6 +99,15 @@ class WritrService extends ChangeNotifier {
     }
   }
 
+  /// Set a project directly (for syncing from ScrivenerService).
+  void setProject(ScrivenerProject project) {
+    _currentProject = project;
+    _error = null;
+    _hasUnsavedChanges = false;
+    _dirtyDocIds.clear();
+    notifyListeners();
+  }
+
   /// Find the .writx file in the project directory.
   Future<File?> _findWritxFile(Directory projectDir) async {
     await for (final entity in projectDir.list()) {

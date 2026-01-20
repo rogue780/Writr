@@ -4,6 +4,10 @@ import '../services/scrivener_service.dart';
 
 /// Traditional menu bar with File/Edit/View/Project/Tools menus
 class AppMenuBar extends StatelessWidget {
+  // Project info
+  final String? projectName;
+  final bool hasUnsavedChanges;
+
   // Project mode
   final ProjectMode projectMode;
 
@@ -52,6 +56,9 @@ class AppMenuBar extends StatelessWidget {
 
   const AppMenuBar({
     super.key,
+    // Project info
+    this.projectName,
+    this.hasUnsavedChanges = false,
     // Mode
     this.projectMode = ProjectMode.native,
     // File
@@ -124,6 +131,36 @@ class AppMenuBar extends StatelessWidget {
             _buildViewModeToggle(context),
           ],
           const Spacer(),
+          // Project name with unsaved indicator
+          if (projectName != null) ...[
+            Text(
+              projectName!,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (hasUnsavedChanges) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'Unsaved',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.orange,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(width: 12),
+          ],
           // Mode indicator
           _buildModeIndicator(context),
           const SizedBox(width: 8),

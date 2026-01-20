@@ -2,11 +2,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/scrivener_service.dart';
+import '../services/writr_service.dart';
 import '../services/storage_access_service.dart';
 import '../services/cloud_storage_service.dart';
 import '../services/recent_projects_service.dart';
 import '../services/cloud_sync_service.dart';
 import '../services/web_storage_service.dart';
+import '../services/project_converter.dart';
 import '../models/cloud_file.dart';
 import '../models/scrivener_project.dart';
 import 'project_editor_screen.dart';
@@ -475,6 +477,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openExistingProject(BuildContext context) async {
     final storageService = context.read<StorageAccessService>();
     final scrivenerService = context.read<ScrivenerService>();
+    final writrService = context.read<WritrService>();
 
     // Show loading indicator
     showDialog(
@@ -486,8 +489,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     try {
-      // Let user pick a .scriv folder from anywhere
-      final projectPath = await storageService.pickScrivenerProject();
+      // Let user pick a .scriv or .writ folder from anywhere
+      final projectPath = await storageService.pickProject();
 
       if (!context.mounted) return;
 
@@ -516,23 +519,53 @@ class _HomeScreenState extends State<HomeScreen> {
       final cachedPath = await storageService.copyProjectToCache(projectPath);
       final pathToLoad = cachedPath ?? projectPath;
 
-      // Load the project
-      await scrivenerService.loadProject(pathToLoad);
+      // Detect project format and load with appropriate service
+      final format = await detectProjectFormat(pathToLoad);
+
+      if (format == ProjectFormat.writr) {
+        // Load .writ project using WritrService
+        await writrService.loadProject(pathToLoad);
+
+        if (!context.mounted) return;
+
+        if (writrService.error != null) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${writrService.error}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        // Transfer to ScrivenerService in native mode for unified access
+        scrivenerService.setProject(
+          writrService.currentProject!,
+          mode: ProjectMode.native,
+        );
+      } else {
+        // Load .scriv project using ScrivenerService
+        await scrivenerService.loadProject(pathToLoad);
+
+        if (!context.mounted) return;
+
+        if (scrivenerService.error != null) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${scrivenerService.error}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+      }
 
       if (!context.mounted) return;
 
       // Close loading dialog
       Navigator.pop(context);
-
-      if (scrivenerService.error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${scrivenerService.error}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
 
       // Add to recent projects
       final recentService = context.read<RecentProjectsService>();
@@ -684,6 +717,7 @@ class _HomeScreenState extends State<HomeScreen> {
       BuildContext context, String projectName) async {
     final storageService = context.read<StorageAccessService>();
     final scrivenerService = context.read<ScrivenerService>();
+    final writrService = context.read<WritrService>();
     final recentService = context.read<RecentProjectsService>();
 
     // Show loading indicator
@@ -721,28 +755,34 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Create the project
-      await scrivenerService.createProject(projectName, directory);
+      // Create native .writ project using WritrService
+      await writrService.createProject(projectName, directory);
 
       if (!context.mounted) return;
 
       // Close loading dialog
       Navigator.pop(context);
 
-      if (scrivenerService.error != null) {
+      if (writrService.error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${scrivenerService.error}'),
+            content: Text('Error: ${writrService.error}'),
             backgroundColor: Colors.red,
           ),
         );
         return;
       }
 
+      // Transfer to ScrivenerService in native mode for unified editor access
+      scrivenerService.setProject(
+        writrService.currentProject!,
+        mode: ProjectMode.native,
+      );
+
       // Add to recent projects
       await recentService.addRecentProject(
-        name: scrivenerService.currentProject!.name,
-        path: scrivenerService.currentProject!.path,
+        name: writrService.currentProject!.name,
+        path: writrService.currentProject!.path,
       );
 
       if (!context.mounted) return;
@@ -770,6 +810,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openRecentProject(
       BuildContext context, dynamic recentProject) async {
     final scrivenerService = context.read<ScrivenerService>();
+    final writrService = context.read<WritrService>();
     final recentService = context.read<RecentProjectsService>();
     final webStorageService = context.read<WebStorageService>();
 
@@ -799,8 +840,26 @@ class _HomeScreenState extends State<HomeScreen> {
           await webStorageService.saveProject(proj);
         });
       } else {
-        // Load from file system
-        await scrivenerService.loadProject(recentProject.path);
+        // Load from file system - detect format first
+        final format = await detectProjectFormat(recentProject.path);
+
+        if (format == ProjectFormat.writr) {
+          // Load .writ project using WritrService
+          await writrService.loadProject(recentProject.path);
+
+          if (writrService.error != null) {
+            throw Exception(writrService.error);
+          }
+
+          // Transfer to ScrivenerService in native mode for unified access
+          scrivenerService.setProject(
+            writrService.currentProject!,
+            mode: ProjectMode.native,
+          );
+        } else {
+          // Load .scriv project using ScrivenerService
+          await scrivenerService.loadProject(recentProject.path);
+        }
       }
 
       if (!context.mounted) return;

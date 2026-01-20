@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
 import 'services/scrivener_service.dart';
+import 'services/writr_service.dart';
 import 'services/storage_access_service.dart';
 import 'services/cloud_storage_service.dart';
 import 'services/recent_projects_service.dart';
@@ -23,6 +24,7 @@ class WritrApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ScrivenerService()),
+        ChangeNotifierProvider(create: (_) => WritrService()),
         ChangeNotifierProvider(create: (_) => StorageAccessService()),
         ChangeNotifierProvider(create: (_) => CloudStorageService()),
         ChangeNotifierProvider(create: (_) => RecentProjectsService()),

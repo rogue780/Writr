@@ -305,14 +305,17 @@ Future<ProjectFormat> detectProjectFormat(String projectPath) async {
 
   final dirName = path.basename(projectPath).toLowerCase();
 
-  // Check by directory extension
+  // Check by directory extension first
   if (dirName.endsWith('.writ')) {
-    // Verify .writx exists
+    // Look for .writx file
     await for (final entity in dir.list()) {
       if (entity is File && entity.path.toLowerCase().endsWith('.writx')) {
         return ProjectFormat.writr;
       }
     }
+    // Fallback: if directory ends with .writ, treat as writr format
+    // This handles cases where the project needs to be saved for the first time
+    return ProjectFormat.writr;
   }
 
   if (dirName.endsWith('.scriv')) {
@@ -322,9 +325,11 @@ Future<ProjectFormat> detectProjectFormat(String projectPath) async {
         return ProjectFormat.scrivener;
       }
     }
+    // Fallback: if directory ends with .scriv, treat as scrivener format
+    return ProjectFormat.scrivener;
   }
 
-  // Check by content
+  // Check by content (for directories without standard extensions)
   await for (final entity in dir.list()) {
     if (entity is File) {
       final fileName = entity.path.toLowerCase();

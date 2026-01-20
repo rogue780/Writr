@@ -9,7 +9,10 @@
       "Bash(flutter test:*)",
       "Bash(head:*)",
       "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && head -30 {}')",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(git checkout:*)",
+      "Bash(flutter build:*)",
+      "Bash(flutter clean:*)"
     ]
   }
 }

@@ -48,6 +48,12 @@ class ScrivenerService extends ChangeNotifier {
   ProjectMode get projectMode => _projectMode;
   bool get isScrivenerMode => _projectMode == ProjectMode.scrivener;
 
+  /// Clear the unsaved changes flag (used when saving via WritrService).
+  void clearUnsavedChanges() {
+    _hasUnsavedChanges = false;
+    notifyListeners();
+  }
+
   /// Throws [StateError] if in Scrivener mode - used to block structural changes.
   ///
   /// In Scrivener mode, only text content edits are allowed to prevent
@@ -856,6 +862,55 @@ class ScrivenerService extends ChangeNotifier {
   List<DocumentSnapshot> getDocumentSnapshots(String documentId) {
     if (_currentProject == null) return [];
     return _currentProject!.getSnapshots(documentId);
+  }
+
+  /// Get the raw RTF content for a document.
+  ///
+  /// Returns the original RTF content if available, or null if the document
+  /// doesn't exist or wasn't loaded from RTF.
+  String? getRawRtfContent(String documentId) {
+    return _rtfContentsById[documentId];
+  }
+
+  /// Check if a document has RTF content.
+  bool hasRtfContent(String documentId) {
+    return _rtfContentsById.containsKey(documentId);
+  }
+
+  /// Update text content with raw RTF.
+  ///
+  /// This is used by the ScrivenerEditor which handles RTF round-tripping
+  /// internally. The provided RTF content replaces the stored RTF directly.
+  void updateTextContentWithRtf(String itemId, String rtfContent, String plainText) {
+    if (_currentProject == null) return;
+
+    // Store the RTF content directly
+    _rtfContentsById[itemId] = rtfContent;
+    _dirtyRtfIds.add(itemId);
+
+    // Update plain text contents
+    final updatedContents =
+        Map<String, String>.from(_currentProject!.textContents);
+    updatedContents[itemId] = plainText;
+
+    _currentProject = ScrivenerProject(
+      name: _currentProject!.name,
+      path: _currentProject!.path,
+      binderItems: _currentProject!.binderItems,
+      textContents: updatedContents,
+      documentMetadata: _currentProject!.documentMetadata,
+      documentSnapshots: _currentProject!.documentSnapshots,
+      researchItems: _currentProject!.researchItems,
+      documentComments: _currentProject!.documentComments,
+      documentFootnotes: _currentProject!.documentFootnotes,
+      footnoteSettings: _currentProject!.footnoteSettings,
+      settings: _currentProject!.settings,
+      labels: _currentProject!.labels,
+      statuses: _currentProject!.statuses,
+    );
+
+    notifyListeners();
+    _triggerAutoSave();
   }
 
   /// Create a snapshot of the current document content

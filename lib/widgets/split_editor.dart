@@ -10,8 +10,10 @@ class SplitEditor extends StatefulWidget {
   final SplitEditorState state;
   final Map<String, String> textContents;
   final Map<String, ResearchItem> researchItems;
+  final bool useMarkdown;
   final bool pageViewMode;
   final ValueChanged<bool>? onPageViewModeChanged;
+  final bool hasUnsavedChanges;
   final Function(String, String) onContentChanged;
   final Function(SplitEditorState) onStateChanged;
 
@@ -20,8 +22,10 @@ class SplitEditor extends StatefulWidget {
     required this.state,
     required this.textContents,
     required this.researchItems,
+    this.useMarkdown = false,
     this.pageViewMode = false,
     this.onPageViewModeChanged,
+    this.hasUnsavedChanges = false,
     required this.onContentChanged,
     required this.onStateChanged,
   });
@@ -209,7 +213,8 @@ class _SplitEditorState extends State<SplitEditor> {
         child: Column(
           children: [
             // Pane header (only show in split mode)
-            if (widget.state.isSplitEnabled) _buildPaneHeader(paneState, isPrimary),
+            if (widget.state.isSplitEnabled)
+              _buildPaneHeader(paneState, isPrimary),
             // Editor content
             Expanded(
               child: document != null
@@ -219,6 +224,8 @@ class _SplitEditorState extends State<SplitEditor> {
                           key: ValueKey('${document.id}_$isPrimary'),
                           item: document,
                           content: widget.textContents[document.id] ?? '',
+                          useMarkdown: widget.useMarkdown,
+                          hasUnsavedChanges: widget.hasUnsavedChanges,
                           pageViewMode: widget.pageViewMode,
                           onPageViewModeChanged: widget.onPageViewModeChanged,
                           onContentChanged: (content) {

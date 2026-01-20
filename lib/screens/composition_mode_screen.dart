@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:super_editor/super_editor.dart';
 import '../models/scrivener_project.dart';
+import '../utils/super_editor_markdown.dart';
 import '../widgets/super_editor_style_phases.dart';
 
 /// Full-screen distraction-free composition mode
 class CompositionModeScreen extends StatefulWidget {
   final BinderItem document;
   final String content;
+  final bool useMarkdown;
   final Function(String) onContentChanged;
   final int? targetWordCount;
 
@@ -16,6 +18,7 @@ class CompositionModeScreen extends StatefulWidget {
     super.key,
     required this.document,
     required this.content,
+    this.useMarkdown = false,
     required this.onContentChanged,
     this.targetWordCount,
   });
@@ -53,7 +56,7 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
     _scrollController = ScrollController();
     _customStylePhases = [ClampInvalidTextSelectionStylePhase()];
     _initializeEditor();
-    _initialWordCount = _countWords(widget.content);
+    _initialWordCount = _countWords(_document.toPlainText());
     _startHideUITimer();
 
     // Enter full screen mode
@@ -72,6 +75,10 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
   }
 
   MutableDocument _createDocumentFromContent(String content) {
+    if (widget.useMarkdown) {
+      return createDocumentFromMarkdown(content);
+    }
+
     final normalized = content.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     var lines = normalized.split('\n');
 
@@ -110,9 +117,12 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
   }
 
   void _onDocumentChangeLog(DocumentChangeLog changeLog) {
-    final plainText = _document.toPlainText();
-    widget.onContentChanged(plainText);
+    final newContent = widget.useMarkdown
+        ? markdownFromDocument(_document)
+        : _document.toPlainText();
+    widget.onContentChanged(newContent);
 
+    final plainText = _document.toPlainText();
     final currentWordCount = _countWords(plainText);
     setState(() {
       _sessionWordCount = currentWordCount - _initialWordCount;
@@ -310,7 +320,8 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
 
             // Settings button
             IconButton(
-              icon: Icon(Icons.settings, color: _textColor.withValues(alpha: 0.7)),
+              icon: Icon(Icons.settings,
+                  color: _textColor.withValues(alpha: 0.7)),
               onPressed: _showSettingsDialog,
               tooltip: 'Settings',
             ),
@@ -318,7 +329,9 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
             // Typewriter mode toggle
             IconButton(
               icon: Icon(
-                _typewriterMode ? Icons.vertical_align_center : Icons.vertical_align_top,
+                _typewriterMode
+                    ? Icons.vertical_align_center
+                    : Icons.vertical_align_top,
                 color: _textColor.withValues(alpha: _typewriterMode ? 1 : 0.5),
               ),
               onPressed: () {
@@ -389,7 +402,8 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
   }
 
   Widget _buildProgressBar(int currentWordCount) {
-    final progress = (currentWordCount / widget.targetWordCount!).clamp(0.0, 1.0);
+    final progress =
+        (currentWordCount / widget.targetWordCount!).clamp(0.0, 1.0);
     final progressColor = progress >= 1.0 ? Colors.green : Colors.blue;
 
     return Column(
@@ -460,7 +474,8 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Text width slider
-                  const Text('Text Width', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('Text Width',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                   Slider(
                     value: _textWidth,
                     min: 400,
@@ -478,7 +493,8 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
                   const SizedBox(height: 16),
 
                   // Font size slider
-                  const Text('Font Size', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('Font Size',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                   Slider(
                     value: _fontSize,
                     min: 14,
@@ -496,30 +512,34 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
                   const SizedBox(height: 16),
 
                   // Font family
-                  const Text('Font Family', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('Font Family',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
-                    children: ['Georgia', 'Times New Roman', 'Arial', 'Courier New']
-                        .map((font) => ChoiceChip(
-                              label: Text(font, style: TextStyle(fontFamily: font)),
-                              selected: _fontFamily == font,
-                              onSelected: (selected) {
-                                if (selected) {
-                                  setDialogState(() {
-                                    _fontFamily = font;
-                                  });
-                                  setState(() {});
-                                }
-                              },
-                            ))
-                        .toList(),
+                    children:
+                        ['Georgia', 'Times New Roman', 'Arial', 'Courier New']
+                            .map((font) => ChoiceChip(
+                                  label: Text(font,
+                                      style: TextStyle(fontFamily: font)),
+                                  selected: _fontFamily == font,
+                                  onSelected: (selected) {
+                                    if (selected) {
+                                      setDialogState(() {
+                                        _fontFamily = font;
+                                      });
+                                      setState(() {});
+                                    }
+                                  },
+                                ))
+                            .toList(),
                   ),
 
                   const SizedBox(height: 16),
 
                   // Background color presets
-                  const Text('Theme', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('Theme',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,

@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/scrivener_service.dart';
+import '../services/writr_service.dart';
 import '../services/storage_access_service.dart';
 import '../services/web_storage_service.dart';
 import '../services/search_service.dart';
@@ -14,6 +16,8 @@ import '../models/view_mode.dart';
 import '../models/editor_state.dart';
 import '../widgets/binder_tree_view.dart';
 import '../widgets/rich_text_editor.dart';
+import '../widgets/scrivener_editor.dart';
+import '../utils/rtf_attributed_text.dart';
 import '../widgets/inspector_panel.dart';
 import '../widgets/corkboard_view.dart';
 import '../widgets/outliner_view.dart';
@@ -106,188 +110,224 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
 
         final colorScheme = Theme.of(context).colorScheme;
 
-        return Scaffold(
-          key: _scaffoldKey,
-          drawer: useMobileUi && hasProject && !_pinBinderOnMobile
-              ? Drawer(child: _buildMobileBinderDrawer(service))
-              : null,
-          endDrawer: useMobileUi && hasProject && !_pinInspectorOnMobile
-              ? Drawer(child: _buildMobileInspectorDrawer(service))
-              : null,
-          body: Column(
-            children: [
-              // Toolbar - either menu bar or simplified
-              ColoredBox(
-                color: toolbarStyle == ToolbarStyle.menuBar
-                    ? colorScheme.surfaceContainerHighest
-                    : colorScheme.surface,
-                child: SafeArea(
-                  bottom: false,
-                  child: toolbarStyle == ToolbarStyle.menuBar
-                      ? AppMenuBar(
-                          projectMode: service.projectMode,
-                          showBinder: useMobileUi ? _pinBinderOnMobile : _showBinder,
-                          showInspector:
-                              useMobileUi ? _pinInspectorOnMobile : _showInspector,
-                          showSearch: _showSearch,
-                          showCollections: useMobileUi ? false : _showCollections,
-                          viewMode: _viewMode,
-                          splitEditorEnabled: _splitEditorState.isSplitEnabled,
-                          onSave: _saveProject,
-                          onSaveAs: () => _saveProjectAs(service),
-                          onOpenProject: () => _openProject(service),
-                          onNewProject: () => _newProject(service),
-                          onExport: kIsWeb ? _exportProject : null,
-                          onImport: kIsWeb ? _importProject : null,
-                          onBackups: () => _openBackupManager(service),
-                          onConvertToWritr: service.isScrivenerMode
-                              ? () => _convertToWritr(service)
-                              : null,
-                          onClose: () => Navigator.pop(context),
-                          onToggleBinder: () {
-                            if (useMobileUi) {
-                              if (!hasProject) {
+        return CallbackShortcuts(
+          bindings: <ShortcutActivator, VoidCallback>{
+            const SingleActivator(LogicalKeyboardKey.keyS, control: true):
+                _saveProject,
+            const SingleActivator(LogicalKeyboardKey.keyS, meta: true):
+                _saveProject,
+            const SingleActivator(
+              LogicalKeyboardKey.keyS,
+              control: true,
+              shift: true,
+            ): () => _saveProjectAs(service),
+            const SingleActivator(
+              LogicalKeyboardKey.keyS,
+              meta: true,
+              shift: true,
+            ): () => _saveProjectAs(service),
+          },
+          child: Scaffold(
+            key: _scaffoldKey,
+            drawer: useMobileUi && hasProject && !_pinBinderOnMobile
+                ? Drawer(child: _buildMobileBinderDrawer(service))
+                : null,
+            endDrawer: useMobileUi && hasProject && !_pinInspectorOnMobile
+                ? Drawer(child: _buildMobileInspectorDrawer(service))
+                : null,
+            body: Column(
+              children: [
+                // Toolbar - either menu bar or simplified
+                ColoredBox(
+                  color: toolbarStyle == ToolbarStyle.menuBar
+                      ? colorScheme.surfaceContainerHighest
+                      : colorScheme.surface,
+                  child: SafeArea(
+                    bottom: false,
+                    child: toolbarStyle == ToolbarStyle.menuBar
+                        ? AppMenuBar(
+                            projectName: projectName,
+                            hasUnsavedChanges: hasUnsavedChanges,
+                            projectMode: service.projectMode,
+                            showBinder:
+                                useMobileUi ? _pinBinderOnMobile : _showBinder,
+                            showInspector: useMobileUi
+                                ? _pinInspectorOnMobile
+                                : _showInspector,
+                            showSearch: _showSearch,
+                            showCollections:
+                                useMobileUi ? false : _showCollections,
+                            viewMode: _viewMode,
+                            splitEditorEnabled:
+                                _splitEditorState.isSplitEnabled,
+                            onSave: _saveProject,
+                            onSaveAs: () => _saveProjectAs(service),
+                            onOpenProject: () => _openProject(service),
+                            onNewProject: () => _newProject(service),
+                            onExport: kIsWeb ? _exportProject : null,
+                            onImport: kIsWeb ? _importProject : null,
+                            onBackups: () => _openBackupManager(service),
+                            onConvertToWritr: service.isScrivenerMode
+                                ? () => _convertToWritr(service)
+                                : null,
+                            onClose: () => Navigator.pop(context),
+                            onToggleBinder: () {
+                              if (useMobileUi) {
+                                if (!hasProject) {
+                                  return;
+                                }
+                                if (_pinBinderOnMobile) {
+                                  setState(() => _pinBinderOnMobile = false);
+                                  return;
+                                }
+                                _toggleBinderDrawer(context);
                                 return;
                               }
-                              if (_pinBinderOnMobile) {
-                                setState(() => _pinBinderOnMobile = false);
+                              setState(() => _showBinder = !_showBinder);
+                            },
+                            onToggleInspector: () {
+                              if (useMobileUi) {
+                                if (!hasProject) {
+                                  return;
+                                }
+                                if (_pinInspectorOnMobile) {
+                                  setState(() => _pinInspectorOnMobile = false);
+                                  return;
+                                }
+                                _toggleInspectorDrawer(context);
                                 return;
                               }
-                              _toggleBinderDrawer(context);
-                              return;
-                            }
-                            setState(() => _showBinder = !_showBinder);
-                          },
-                          onToggleInspector: () {
-                            if (useMobileUi) {
-                              if (!hasProject) {
+                              setState(() => _showInspector = !_showInspector);
+                            },
+                            onToggleSearch: () =>
+                                setState(() => _showSearch = !_showSearch),
+                            onToggleCollections: useMobileUi
+                                ? null
+                                : () => setState(
+                                      () =>
+                                          _showCollections = !_showCollections,
+                                    ),
+                            onViewModeChanged: (mode) =>
+                                setState(() => _viewMode = mode),
+                            onToggleSplitEditor:
+                                useMobileUi ? null : _toggleSplitEditor,
+                            onCompile: service.currentProject != null
+                                ? () =>
+                                    _openCompileScreen(service.currentProject!)
+                                : null,
+                            onTargets: () => _openTargetsDialog(service),
+                            onSessionTarget: () => _startSessionTarget(service),
+                            onStatistics: () => _openStatistics(service),
+                            onTemplateManager: _openTemplateManager,
+                            onInsertTemplate: () =>
+                                _insertFromTemplate(service),
+                            onCompositionMode: () =>
+                                _openCompositionMode(service),
+                            onNameGenerator: _openNameGenerator,
+                            onLinguisticAnalysis: () =>
+                                _openLinguisticAnalysis(service),
+                            onKeywordManager: _openKeywordManager,
+                            onCustomFields: _openCustomFieldManager,
+                            onSwitchToSimplifiedToolbar: () {
+                              prefs.setToolbarStyle(ToolbarStyle.simplified);
+                            },
+                          )
+                        : SimplifiedToolbar(
+                            projectName: projectName,
+                            hasUnsavedChanges: hasUnsavedChanges,
+                            projectMode: service.projectMode,
+                            viewMode: _viewMode,
+                            showBinder:
+                                useMobileUi ? _pinBinderOnMobile : _showBinder,
+                            showInspector: useMobileUi
+                                ? _pinInspectorOnMobile
+                                : _showInspector,
+                            showSearch: _showSearch,
+                            showCollections:
+                                useMobileUi ? false : _showCollections,
+                            splitEditorEnabled:
+                                _splitEditorState.isSplitEnabled,
+                            targetProgress: targetProgress,
+                            onViewModeChanged: (mode) =>
+                                setState(() => _viewMode = mode),
+                            onToggleBinder: () {
+                              if (useMobileUi) {
+                                if (!hasProject) {
+                                  return;
+                                }
+                                if (_pinBinderOnMobile) {
+                                  setState(() => _pinBinderOnMobile = false);
+                                  return;
+                                }
+                                _toggleBinderDrawer(context);
                                 return;
                               }
-                              if (_pinInspectorOnMobile) {
-                                setState(() => _pinInspectorOnMobile = false);
+                              setState(() => _showBinder = !_showBinder);
+                            },
+                            onToggleInspector: () {
+                              if (useMobileUi) {
+                                if (!hasProject) {
+                                  return;
+                                }
+                                if (_pinInspectorOnMobile) {
+                                  setState(() => _pinInspectorOnMobile = false);
+                                  return;
+                                }
+                                _toggleInspectorDrawer(context);
                                 return;
                               }
-                              _toggleInspectorDrawer(context);
-                              return;
-                            }
-                            setState(() => _showInspector = !_showInspector);
-                          },
-                          onToggleSearch: () =>
-                              setState(() => _showSearch = !_showSearch),
-                          onToggleCollections: useMobileUi
-                              ? null
-                              : () => setState(
-                                    () => _showCollections = !_showCollections,
-                                  ),
-                          onViewModeChanged: (mode) =>
-                              setState(() => _viewMode = mode),
-                          onToggleSplitEditor:
-                              useMobileUi ? null : _toggleSplitEditor,
-                          onCompile: service.currentProject != null
-                              ? () => _openCompileScreen(service.currentProject!)
-                              : null,
-                          onTargets: () => _openTargetsDialog(service),
-                          onSessionTarget: () => _startSessionTarget(service),
-                          onStatistics: () => _openStatistics(service),
-                          onTemplateManager: _openTemplateManager,
-                          onInsertTemplate: () => _insertFromTemplate(service),
-                          onCompositionMode: () => _openCompositionMode(service),
-                          onNameGenerator: _openNameGenerator,
-                          onLinguisticAnalysis: () =>
-                              _openLinguisticAnalysis(service),
-                          onKeywordManager: _openKeywordManager,
-                          onCustomFields: _openCustomFieldManager,
-                          onSwitchToSimplifiedToolbar: () {
-                            prefs.setToolbarStyle(ToolbarStyle.simplified);
-                          },
-                        )
-                      : SimplifiedToolbar(
-                          projectName: projectName,
-                          hasUnsavedChanges: hasUnsavedChanges,
-                          projectMode: service.projectMode,
-                          viewMode: _viewMode,
-                          showBinder: useMobileUi ? _pinBinderOnMobile : _showBinder,
-                          showInspector:
-                              useMobileUi ? _pinInspectorOnMobile : _showInspector,
-                          showSearch: _showSearch,
-                          showCollections: useMobileUi ? false : _showCollections,
-                          splitEditorEnabled: _splitEditorState.isSplitEnabled,
-                          targetProgress: targetProgress,
-                          onViewModeChanged: (mode) =>
-                              setState(() => _viewMode = mode),
-                          onToggleBinder: () {
-                            if (useMobileUi) {
-                              if (!hasProject) {
-                                return;
-                              }
-                              if (_pinBinderOnMobile) {
-                                setState(() => _pinBinderOnMobile = false);
-                                return;
-                              }
-                              _toggleBinderDrawer(context);
-                              return;
-                            }
-                            setState(() => _showBinder = !_showBinder);
-                          },
-                          onToggleInspector: () {
-                            if (useMobileUi) {
-                              if (!hasProject) {
-                                return;
-                              }
-                              if (_pinInspectorOnMobile) {
-                                setState(() => _pinInspectorOnMobile = false);
-                                return;
-                              }
-                              _toggleInspectorDrawer(context);
-                              return;
-                            }
-                            setState(() => _showInspector = !_showInspector);
-                          },
-                          onToggleSearch: () =>
-                              setState(() => _showSearch = !_showSearch),
-                          onToggleCollections: useMobileUi
-                              ? null
-                              : () => setState(
-                                    () => _showCollections = !_showCollections,
-                                  ),
-                          onToggleSplitEditor:
-                              useMobileUi ? null : _toggleSplitEditor,
-                          onSave: _saveProject,
-                          onSaveAs: () => _saveProjectAs(service),
-                          onOpenProject: () => _openProject(service),
-                          onNewProject: () => _newProject(service),
-                          onExport: kIsWeb ? _exportProject : null,
-                          onImport: kIsWeb ? _importProject : null,
-                          onBackups: () => _openBackupManager(service),
-                          onConvertToWritr: service.isScrivenerMode
-                              ? () => _convertToWritr(service)
-                              : null,
-                          onCompile: service.currentProject != null
-                              ? () => _openCompileScreen(service.currentProject!)
-                              : null,
-                          onTargets: () => _openTargetsDialog(service),
-                          onSessionTarget: () => _startSessionTarget(service),
-                          onStatistics: () => _openStatistics(service),
-                          onTemplateManager: _openTemplateManager,
-                          onInsertTemplate: () => _insertFromTemplate(service),
-                          onCompositionMode: () => _openCompositionMode(service),
-                          onNameGenerator: _openNameGenerator,
-                          onLinguisticAnalysis: () =>
-                              _openLinguisticAnalysis(service),
-                          onKeywordManager: _openKeywordManager,
-                          onCustomFields: _openCustomFieldManager,
-                          onSwitchToMenuBar: () {
-                            prefs.setToolbarStyle(ToolbarStyle.menuBar);
-                          },
-                        ),
+                              setState(() => _showInspector = !_showInspector);
+                            },
+                            onToggleSearch: () =>
+                                setState(() => _showSearch = !_showSearch),
+                            onToggleCollections: useMobileUi
+                                ? null
+                                : () => setState(
+                                      () =>
+                                          _showCollections = !_showCollections,
+                                    ),
+                            onToggleSplitEditor:
+                                useMobileUi ? null : _toggleSplitEditor,
+                            onSave: _saveProject,
+                            onSaveAs: () => _saveProjectAs(service),
+                            onOpenProject: () => _openProject(service),
+                            onNewProject: () => _newProject(service),
+                            onExport: kIsWeb ? _exportProject : null,
+                            onImport: kIsWeb ? _importProject : null,
+                            onBackups: () => _openBackupManager(service),
+                            onConvertToWritr: service.isScrivenerMode
+                                ? () => _convertToWritr(service)
+                                : null,
+                            onCompile: service.currentProject != null
+                                ? () =>
+                                    _openCompileScreen(service.currentProject!)
+                                : null,
+                            onTargets: () => _openTargetsDialog(service),
+                            onSessionTarget: () => _startSessionTarget(service),
+                            onStatistics: () => _openStatistics(service),
+                            onTemplateManager: _openTemplateManager,
+                            onInsertTemplate: () =>
+                                _insertFromTemplate(service),
+                            onCompositionMode: () =>
+                                _openCompositionMode(service),
+                            onNameGenerator: _openNameGenerator,
+                            onLinguisticAnalysis: () =>
+                                _openLinguisticAnalysis(service),
+                            onKeywordManager: _openKeywordManager,
+                            onCustomFields: _openCustomFieldManager,
+                            onSwitchToMenuBar: () {
+                              prefs.setToolbarStyle(ToolbarStyle.menuBar);
+                            },
+                          ),
+                  ),
                 ),
-              ),
 
-              // Main content
-              Expanded(
-                child: _buildBody(service, prefs),
-              ),
-            ],
+                // Main content
+                Expanded(
+                  child: _buildBody(service, prefs),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -542,7 +582,8 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
 
     final useMobileUi = _useMobileUi(context);
     final showBinderPane = useMobileUi ? _pinBinderOnMobile : _showBinder;
-    final showInspectorPane = useMobileUi ? _pinInspectorOnMobile : _showInspector;
+    final showInspectorPane =
+        useMobileUi ? _pinInspectorOnMobile : _showInspector;
 
     return Column(
       children: [
@@ -672,8 +713,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
               if (showInspectorPane)
                 SizedBox(
                   width: prefs.inspectorWidth,
-                  child:
-                      _buildInspectorPane(service, useMobileUi: useMobileUi),
+                  child: _buildInspectorPane(service, useMobileUi: useMobileUi),
                 ),
               if (!showInspectorPane)
                 EdgePanelHandle(
@@ -737,9 +777,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
               ),
               IconButton(
                 icon: Icon(
-                  _pinBinderOnMobile
-                      ? Icons.push_pin
-                      : Icons.push_pin_outlined,
+                  _pinBinderOnMobile ? Icons.push_pin : Icons.push_pin_outlined,
                   size: 20,
                 ),
                 tooltip: _pinBinderOnMobile ? 'Unpin' : 'Pin',
@@ -884,12 +922,17 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
   }
 
   Widget _buildEditorView(ScrivenerService service) {
+    final useMarkdown =
+        service.currentProject?.path.toLowerCase().endsWith('.writ') ?? false;
+
     // Use split editor if split mode is enabled
     if (_splitEditorState.isSplitEnabled) {
       return SplitEditor(
         state: _splitEditorState,
         textContents: service.currentProject!.textContents,
         researchItems: service.currentProject!.researchItems,
+        useMarkdown: useMarkdown,
+        hasUnsavedChanges: service.hasUnsavedChanges,
         pageViewMode: context.watch<PreferencesService>().pageViewMode,
         onPageViewModeChanged: (enabled) {
           context.read<PreferencesService>().setPageViewMode(enabled);
@@ -901,9 +944,11 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
           setState(() {
             _splitEditorState = state;
             // Update selected item based on focused pane
-            if (state.primaryPane.isFocused && state.primaryPane.document != null) {
+            if (state.primaryPane.isFocused &&
+                state.primaryPane.document != null) {
               _selectedItem = state.primaryPane.document;
-            } else if (state.secondaryPane.isFocused && state.secondaryPane.document != null) {
+            } else if (state.secondaryPane.isFocused &&
+                state.secondaryPane.document != null) {
               _selectedItem = state.secondaryPane.document;
             }
           });
@@ -932,12 +977,42 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         'Loading content for item: ${_selectedItem!.title} (ID: ${_selectedItem!.id})');
     debugPrint('Content length: ${content.length}');
 
+    // In Scrivener mode with RTF content, use the ScrivenerEditor for proper
+    // RTF formatting round-trip support.
+    if (service.isScrivenerMode && service.hasRtfContent(_selectedItem!.id)) {
+      final rtfContent = service.getRawRtfContent(_selectedItem!.id) ?? '';
+      return ScrivenerEditor(
+        item: _selectedItem!,
+        rtfContent: rtfContent,
+        hasUnsavedChanges: service.hasUnsavedChanges,
+        pageViewMode: context.watch<PreferencesService>().pageViewMode,
+        onPageViewModeChanged: (enabled) {
+          context.read<PreferencesService>().setPageViewMode(enabled);
+        },
+        onContentChanged: (rtfContent) {
+          // Extract plain text from the RTF for storage
+          final converter = RtfToAttributedText(rtfContent);
+          final result = converter.convert();
+          final plainText =
+              result.paragraphs.map((p) => p.toPlainText()).join('\n');
+
+          service.updateTextContentWithRtf(
+            _selectedItem!.id,
+            rtfContent,
+            plainText,
+          );
+        },
+      );
+    }
+
     // Get comments for this document
     final comments = _commentService.getCommentsForDocument(_selectedItem!.id);
 
     return RichTextEditor(
       item: _selectedItem!,
       content: content,
+      useMarkdown: useMarkdown,
+      hasUnsavedChanges: service.hasUnsavedChanges,
       comments: comments,
       pageViewMode: context.watch<PreferencesService>().pageViewMode,
       onPageViewModeChanged: (enabled) {
@@ -1165,9 +1240,12 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
       );
     }
 
+    final useMarkdown =
+        service.currentProject?.path.toLowerCase().endsWith('.writ') ?? false;
     return ScriveningsView(
       folder: folder,
       textContents: service.currentProject!.textContents,
+      useMarkdown: useMarkdown,
       onContentChanged: (documentId, content) {
         service.updateTextContent(documentId, content);
       },
@@ -1191,13 +1269,17 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
   void _openCompositionMode(ScrivenerService service) {
     if (_selectedItem == null || _selectedItem!.isFolder) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select a document to enter composition mode')),
+        const SnackBar(
+            content: Text('Select a document to enter composition mode')),
       );
       return;
     }
 
-    final content = service.currentProject!.textContents[_selectedItem!.id] ?? '';
+    final content =
+        service.currentProject!.textContents[_selectedItem!.id] ?? '';
     final metadata = service.getDocumentMetadata(_selectedItem!.id);
+    final useMarkdown =
+        service.currentProject?.path.toLowerCase().endsWith('.writ') ?? false;
 
     Navigator.push(
       context,
@@ -1205,6 +1287,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         builder: (context) => CompositionModeScreen(
           document: _selectedItem!,
           content: content,
+          useMarkdown: useMarkdown,
           targetWordCount: metadata.wordCountTarget,
           onContentChanged: (newContent) {
             service.updateTextContent(_selectedItem!.id, newContent);
@@ -1369,7 +1452,8 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
             }
 
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Created "${template.name}" from template')),
+              SnackBar(
+                  content: Text('Created "${template.name}" from template')),
             );
           } on StateError catch (e) {
             _showScrivenerModeError(e.message);
@@ -1409,7 +1493,8 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
       return;
     }
 
-    final content = service.currentProject?.textContents[_selectedItem!.id] ?? '';
+    final content =
+        service.currentProject?.textContents[_selectedItem!.id] ?? '';
 
     showDialog(
       context: context,
@@ -1478,10 +1563,14 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
 
   Future<void> _saveProject() async {
     final service = context.read<ScrivenerService>();
+    final writrService = context.read<WritrService>();
     final storageService = context.read<StorageAccessService>();
 
+    final projectPath = service.currentProject?.path;
+    if (projectPath == null) return;
+
     final hasPermission = await storageService.ensureStoragePermission(
-      writableDirectory: service.currentProject?.path,
+      writableDirectory: projectPath,
     );
     if (!mounted) return;
     if (!hasPermission) {
@@ -1508,16 +1597,33 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
       ),
     );
 
-    await service.saveProject();
+    // Detect project format and save with appropriate service
+    final format = await detectProjectFormat(projectPath);
+    String? errorMessage;
+
+    if (format == ProjectFormat.writr) {
+      // Sync project state to WritrService and save as .writ format
+      writrService.setProject(service.currentProject!);
+      await writrService.saveProject();
+      errorMessage = writrService.error;
+      // Clear unsaved state in ScrivenerService too
+      if (errorMessage == null) {
+        service.clearUnsavedChanges();
+      }
+    } else {
+      // Save as .scriv format
+      await service.saveProject();
+      errorMessage = service.error;
+    }
 
     if (!mounted) return;
 
     // Close loading dialog
     Navigator.pop(context);
 
-    if (service.error != null) {
+    if (errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving: ${service.error}')),
+        SnackBar(content: Text('Error saving: $errorMessage')),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1660,7 +1766,8 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Unknown project format. Please select a .scriv or .writ folder.'),
+              content: Text(
+                  'Unknown project format. Please select a .scriv or .writ folder.'),
               backgroundColor: Colors.orange,
             ),
           );
@@ -1681,37 +1788,58 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
       // Load project based on format
       if (format == ProjectFormat.scrivener) {
         await service.loadProject(result);
-      } else {
-        // TODO: Load .writ project using WritrService
-        // For now, show not yet implemented message
-        if (mounted) {
-          Navigator.pop(context); // Close loading
+
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading
+
+        if (service.error != null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Native Writr format loading coming soon!'),
-              backgroundColor: Colors.blue,
+            SnackBar(
+              content: Text('Error opening project: ${service.error}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        } else {
+          // Clear selection when loading new project
+          setState(() {
+            _selectedItem = null;
+            _selectedFolder = null;
+          });
+        }
+      } else {
+        // Load .writ project using WritrService
+        final writrService = context.read<WritrService>();
+        await writrService.loadProject(result);
+
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading
+
+        if (writrService.error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error opening project: ${writrService.error}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        } else if (writrService.currentProject != null) {
+          // Transfer the loaded project to ScrivenerService in native mode
+          service.setProject(writrService.currentProject!,
+              mode: ProjectMode.native);
+
+          // Clear selection when loading new project
+          setState(() {
+            _selectedItem = null;
+            _selectedFolder = null;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('Opened project: ${writrService.currentProject!.name}'),
+              backgroundColor: Colors.green,
             ),
           );
         }
-        return;
-      }
-
-      if (!mounted) return;
-      Navigator.pop(context); // Close loading
-
-      if (service.error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error opening project: ${service.error}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      } else {
-        // Clear selection when loading new project
-        setState(() {
-          _selectedItem = null;
-          _selectedFolder = null;
-        });
       }
     } catch (e) {
       if (mounted) {
@@ -1779,15 +1907,59 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
 
       if (outputDir == null) return;
 
-      // TODO: Create .writ project structure
-      // For now, show not yet implemented
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Native Writr project creation coming soon!'),
-            backgroundColor: Colors.blue,
-          ),
-        );
+      // Show loading
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      try {
+        // Create .writ project using WritrService
+        final writrService = context.read<WritrService>();
+        await writrService.createProject(projectName, outputDir);
+
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading
+
+        if (writrService.error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error creating project: ${writrService.error}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        } else if (writrService.currentProject != null) {
+          // Transfer the created project to ScrivenerService in native mode
+          service.setProject(writrService.currentProject!,
+              mode: ProjectMode.native);
+
+          // Clear selection
+          setState(() {
+            _selectedItem = null;
+            _selectedFolder = null;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Created new project: $projectName'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error creating project: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -1918,7 +2090,8 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Conversion Complete'),
-          content: const Text('Would you like to open the converted Writr project?'),
+          content:
+              const Text('Would you like to open the converted Writr project?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -2019,13 +2192,15 @@ class _TargetsManagementDialog extends StatefulWidget {
   });
 
   @override
-  State<_TargetsManagementDialog> createState() => _TargetsManagementDialogState();
+  State<_TargetsManagementDialog> createState() =>
+      _TargetsManagementDialogState();
 }
 
 class _TargetsManagementDialogState extends State<_TargetsManagementDialog> {
   @override
   Widget build(BuildContext context) {
-    final progressList = widget.targetService.getAllTargetProgress(widget.project);
+    final progressList =
+        widget.targetService.getAllTargetProgress(widget.project);
 
     return Dialog(
       child: Container(
@@ -2075,7 +2250,8 @@ class _TargetsManagementDialogState extends State<_TargetsManagementDialog> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.track_changes, size: 64, color: Colors.grey[400]),
+                          Icon(Icons.track_changes,
+                              size: 64, color: Colors.grey[400]),
                           const SizedBox(height: 16),
                           Text(
                             'No targets set',

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:super_editor/super_editor.dart';
 import '../models/comment.dart';
 import '../models/scrivener_project.dart';
+import '../utils/super_editor_markdown.dart';
 import 'comment_bubble.dart';
 import 'super_editor_style_phases.dart';
 
@@ -10,10 +11,13 @@ import 'super_editor_style_phases.dart';
 class RichTextEditor extends StatefulWidget {
   final BinderItem item;
   final String content;
+  final bool useMarkdown;
   final Function(String) onContentChanged;
   final Function(Document)? onDocumentChanged;
+  final bool hasUnsavedChanges;
   final List<DocumentComment> comments;
-  final Function(int startOffset, int endOffset, String text, int color)? onAddComment;
+  final Function(int startOffset, int endOffset, String text, int color)?
+      onAddComment;
   final Function(String commentId)? onDeleteComment;
   final Function(String commentId, bool resolved)? onResolveComment;
   final Function(String commentId, String text)? onEditComment;
@@ -26,8 +30,10 @@ class RichTextEditor extends StatefulWidget {
     super.key,
     required this.item,
     required this.content,
+    this.useMarkdown = false,
     required this.onContentChanged,
     this.onDocumentChanged,
+    this.hasUnsavedChanges = false,
     this.comments = const [],
     this.onAddComment,
     this.onDeleteComment,
@@ -99,6 +105,10 @@ class _RichTextEditorState extends State<RichTextEditor> {
   }
 
   MutableDocument _createDocumentFromContent(String content) {
+    if (widget.useMarkdown) {
+      return createDocumentFromMarkdown(content);
+    }
+
     final normalized = content.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     var lines = normalized.split('\n');
 
@@ -138,6 +148,14 @@ class _RichTextEditorState extends State<RichTextEditor> {
       });
     }
 
+    if (oldWidget.hasUnsavedChanges && !widget.hasUnsavedChanges) {
+      if (_hasUnsavedChanges) {
+        setState(() {
+          _hasUnsavedChanges = false;
+        });
+      }
+    }
+
     if (oldWidget.showCommentMargin != widget.showCommentMargin) {
       _showCommentMargin = widget.showCommentMargin;
     }
@@ -162,8 +180,10 @@ class _RichTextEditorState extends State<RichTextEditor> {
       _hasUnsavedChanges = true;
     });
 
-    final plainText = _document.toPlainText();
-    widget.onContentChanged(plainText);
+    final newContent = widget.useMarkdown
+        ? markdownFromDocument(_document)
+        : _document.toPlainText();
+    widget.onContentChanged(newContent);
     widget.onDocumentChanged?.call(_document);
   }
 
@@ -187,8 +207,7 @@ class _RichTextEditorState extends State<RichTextEditor> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(child: _buildEditor(context)),
-                      if (showSideComments)
-                        _buildCommentMargin(context),
+                      if (showSideComments) _buildCommentMargin(context),
                     ],
                   )
                 : _buildNonEditableView(context),
@@ -458,7 +477,8 @@ class _RichTextEditorState extends State<RichTextEditor> {
                                   _selectedCommentId = comment.id;
                                 });
                                 Navigator.of(sheetContext).pop();
-                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                WidgetsBinding.instance
+                                    .addPostFrameCallback((_) {
                                   if (!mounted) return;
                                   _navigateToComment(comment);
                                 });
@@ -480,7 +500,8 @@ class _RichTextEditorState extends State<RichTextEditor> {
                                   : null,
                               onReply: widget.onReplyToComment != null
                                   ? (text) {
-                                      widget.onReplyToComment!(comment.id, text);
+                                      widget.onReplyToComment!(
+                                          comment.id, text);
                                       refreshAfterFrame();
                                     }
                                   : null,
@@ -875,8 +896,8 @@ class _RichTextEditorState extends State<RichTextEditor> {
       runningOffset += nodeTextLength + 1; // node text + '\n'
     }
 
-    final lastTextNode =
-        _document.lastWhere((node) => node is TextNode, orElse: () => _document.first) as TextNode;
+    final lastTextNode = _document.lastWhere((node) => node is TextNode,
+        orElse: () => _document.first) as TextNode;
     return DocumentPosition(
       nodeId: lastTextNode.id,
       nodePosition: TextNodePosition(offset: lastTextNode.text.length),
@@ -888,7 +909,8 @@ class _RichTextEditorState extends State<RichTextEditor> {
       document: _document,
       editor: _editor,
       composer: _composer,
-      documentLayoutResolver: () => _documentLayoutKey.currentState as DocumentLayout,
+      documentLayoutResolver: () =>
+          _documentLayoutKey.currentState as DocumentLayout,
     );
   }
 
@@ -992,7 +1014,8 @@ class _MobileSelectionToolbar extends StatelessWidget {
     return ValueListenableBuilder(
       valueListenable: selectionNotifier,
       builder: (context, selection, child) {
-        final hasExpandedSelection = selection != null && !selection.isCollapsed;
+        final hasExpandedSelection =
+            selection != null && !selection.isCollapsed;
 
         final actions = <_MobileSelectionToolbarAction>[
           if (hasExpandedSelection)
@@ -1035,7 +1058,8 @@ class _MobileSelectionToolbar extends StatelessWidget {
                   TextButton(
                     onPressed: action.onPressed,
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       visualDensity: VisualDensity.compact,

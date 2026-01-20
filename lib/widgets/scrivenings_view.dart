@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:super_editor/super_editor.dart';
 import '../models/scrivener_project.dart';
+import '../utils/super_editor_markdown.dart';
 import 'super_editor_style_phases.dart';
 
 /// Scrivenings view displaying multiple documents as one continuous text.
 class ScriveningsView extends StatefulWidget {
   final BinderItem folder;
   final Map<String, String> textContents;
+  final bool useMarkdown;
   final Function(String, String) onContentChanged;
   final Function(BinderItem)? onDocumentTapped;
 
@@ -14,6 +16,7 @@ class ScriveningsView extends StatefulWidget {
     super.key,
     required this.folder,
     required this.textContents,
+    this.useMarkdown = false,
     required this.onContentChanged,
     this.onDocumentTapped,
   });
@@ -46,8 +49,12 @@ class _ScriveningsViewState extends State<ScriveningsView> {
       );
 
       void listener(DocumentChangeLog changeLog) {
-        widget.onContentChanged(documentId, document.toPlainText());
+        final newContent = widget.useMarkdown
+            ? markdownFromDocument(document)
+            : document.toPlainText();
+        widget.onContentChanged(documentId, newContent);
       }
+
       document.addListener(listener);
 
       final focusNode = FocusNode();
@@ -58,6 +65,7 @@ class _ScriveningsViewState extends State<ScriveningsView> {
           _activeDocumentId = documentId;
         });
       }
+
       focusNode.addListener(focusListener);
 
       _controllers[documentId] = _ScriveningsEditorController(
@@ -73,6 +81,10 @@ class _ScriveningsViewState extends State<ScriveningsView> {
   }
 
   MutableDocument _createDocumentFromContent(String content) {
+    if (widget.useMarkdown) {
+      return createDocumentFromMarkdown(content);
+    }
+
     final normalized = content.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     var lines = normalized.split('\n');
 
@@ -286,7 +298,8 @@ class _ScriveningsViewState extends State<ScriveningsView> {
                     : theme.colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
-                  color: isActive ? theme.colorScheme.primary : theme.dividerColor,
+                  color:
+                      isActive ? theme.colorScheme.primary : theme.dividerColor,
                 ),
               ),
               child: Row(

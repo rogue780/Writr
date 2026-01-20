@@ -74,22 +74,23 @@ class StorageAccessService extends ChangeNotifier {
     }
   }
 
-  /// Pick a Scrivener project directory using the system file picker
+  /// Pick a project directory using the system file picker.
+  /// Supports both .scriv (Scrivener) and .writ (Writr) project folders.
   /// This works with any storage provider that has a document provider:
   /// - Google Drive
   /// - Dropbox
   /// - OneDrive
   /// - Local storage
   /// - Any other cloud storage app
-  Future<String?> pickScrivenerProject() async {
+  Future<String?> pickProject() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      // Use directory picker to select .scriv folder
+      // Use directory picker to select project folder
       String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: 'Select Scrivener Project (.scriv folder)',
+        dialogTitle: 'Select Project Folder (.scriv or .writ)',
       );
 
       if (selectedDirectory == null) {
@@ -99,10 +100,12 @@ class StorageAccessService extends ChangeNotifier {
         return null;
       }
 
-      // Verify it's a .scriv directory
-      if (!selectedDirectory.endsWith('.scriv')) {
+      // Verify it's a supported project directory
+      final isScrivener = selectedDirectory.endsWith('.scriv');
+      final isWritr = selectedDirectory.endsWith('.writ');
+      if (!isScrivener && !isWritr) {
         throw Exception(
-          'Please select a .scriv folder. Selected: $selectedDirectory',
+          'Please select a .scriv or .writ project folder. Selected: $selectedDirectory',
         );
       }
 
@@ -124,6 +127,10 @@ class StorageAccessService extends ChangeNotifier {
       return null;
     }
   }
+
+  /// Pick a Scrivener project directory using the system file picker.
+  /// @deprecated Use [pickProject] instead, which supports both .scriv and .writ formats.
+  Future<String?> pickScrivenerProject() => pickProject();
 
   /// Pick any directory for creating a new project
   Future<String?> pickDirectoryForNewProject() async {

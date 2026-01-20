@@ -131,6 +131,22 @@ class BinderTreeView extends StatelessWidget {
     final controller = TextEditingController();
     final typeName = type == BinderItemType.folder ? 'Folder' : 'Document';
 
+    void doAdd() {
+      if (controller.text.isNotEmpty) {
+        try {
+          context.read<ScrivenerService>().addBinderItem(
+                title: controller.text,
+                type: type,
+                parentId: parentId,
+              );
+          Navigator.pop(context);
+        } on StateError catch (e) {
+          Navigator.pop(context);
+          _showScrivenerModeError(context, e.message);
+        }
+      }
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -142,6 +158,7 @@ class BinderTreeView extends StatelessWidget {
             hintText: type == BinderItemType.folder ? 'Chapter 1' : 'Scene 1',
           ),
           autofocus: true,
+          onSubmitted: (_) => doAdd(),
         ),
         actions: [
           TextButton(
@@ -149,21 +166,7 @@ class BinderTreeView extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              if (controller.text.isNotEmpty) {
-                try {
-                  context.read<ScrivenerService>().addBinderItem(
-                        title: controller.text,
-                        type: type,
-                        parentId: parentId,
-                      );
-                  Navigator.pop(context);
-                } on StateError catch (e) {
-                  Navigator.pop(context);
-                  _showScrivenerModeError(context, e.message);
-                }
-              }
-            },
+            onPressed: doAdd,
             child: const Text('Add'),
           ),
         ],
@@ -259,10 +262,14 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        InkWell(
-          onTap: () => widget.onItemSelected(widget.item),
-          onLongPress: () => _showContextMenu(context),
-          child: Container(
+        GestureDetector(
+          onSecondaryTapDown: (details) {
+            _showPopupMenu(context, details.globalPosition);
+          },
+          child: InkWell(
+            onTap: () => widget.onItemSelected(widget.item),
+            onLongPress: () => _showContextMenu(context),
+            child: Container(
             padding: EdgeInsets.only(
               left: 8.0 + (widget.depth * 16.0),
               top: 8,
@@ -315,6 +322,7 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
               ],
             ),
           ),
+        ),
         ),
         if (_isExpanded && widget.item.children.isNotEmpty)
           ...widget.item.children.map((child) {
@@ -446,6 +454,101 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
     );
   }
 
+  /// Show popup menu at the given position (for right-click on desktop).
+  void _showPopupMenu(BuildContext context, Offset position) {
+    final isScrivenerMode = widget.isScrivenerMode;
+    final isFolder = widget.item.isFolder;
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx + 1,
+        position.dy + 1,
+      ),
+      items: [
+        if (isFolder) ...[
+          PopupMenuItem<String>(
+            value: 'add_folder',
+            enabled: !isScrivenerMode,
+            child: Row(
+              children: [
+                Icon(Icons.folder, size: 18, color: isScrivenerMode ? Theme.of(context).disabledColor : Colors.blue),
+                const SizedBox(width: 8),
+                Text('New Folder', style: TextStyle(color: isScrivenerMode ? Theme.of(context).disabledColor : null)),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'add_document',
+            enabled: !isScrivenerMode,
+            child: Row(
+              children: [
+                Icon(Icons.description, size: 18, color: isScrivenerMode ? Theme.of(context).disabledColor : Colors.grey),
+                const SizedBox(width: 8),
+                Text('New Document', style: TextStyle(color: isScrivenerMode ? Theme.of(context).disabledColor : null)),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'import',
+            enabled: !isScrivenerMode,
+            child: Row(
+              children: [
+                Icon(Icons.file_upload, size: 18, color: isScrivenerMode ? Theme.of(context).disabledColor : Colors.purple),
+                const SizedBox(width: 8),
+                Text('Import Files', style: TextStyle(color: isScrivenerMode ? Theme.of(context).disabledColor : null)),
+              ],
+            ),
+          ),
+          const PopupMenuDivider(),
+        ],
+        PopupMenuItem<String>(
+          value: 'rename',
+          enabled: !isScrivenerMode,
+          child: Row(
+            children: [
+              Icon(Icons.edit, size: 18, color: isScrivenerMode ? Theme.of(context).disabledColor : null),
+              const SizedBox(width: 8),
+              Text('Rename', style: TextStyle(color: isScrivenerMode ? Theme.of(context).disabledColor : null)),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'delete',
+          enabled: !isScrivenerMode,
+          child: Row(
+            children: [
+              Icon(Icons.delete, size: 18, color: isScrivenerMode ? Theme.of(context).disabledColor : Colors.red),
+              const SizedBox(width: 8),
+              Text('Delete', style: TextStyle(color: isScrivenerMode ? Theme.of(context).disabledColor : null)),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == null || !mounted) return;
+      switch (value) {
+        case 'add_folder':
+          _showAddDialog(context, BinderItemType.folder, widget.item.id);
+          break;
+        case 'add_document':
+          _showAddDialog(context, BinderItemType.text, widget.item.id);
+          break;
+        case 'import':
+          _importResearchFiles(context, widget.item.id);
+          break;
+        case 'rename':
+          _showRenameDialog(context);
+          break;
+        case 'delete':
+          _showDeleteDialog(context);
+          break;
+      }
+    });
+  }
+
   Future<void> _importResearchFiles(BuildContext context, String parentFolderId) async {
     final importService = ImportService();
     final scrivenerService = context.read<ScrivenerService>();
@@ -499,6 +602,22 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
     final controller = TextEditingController();
     final typeName = type == BinderItemType.folder ? 'Folder' : 'Document';
 
+    void doAdd() {
+      if (controller.text.isNotEmpty) {
+        try {
+          context.read<ScrivenerService>().addBinderItem(
+                title: controller.text,
+                type: type,
+                parentId: parentId,
+              );
+          Navigator.pop(context);
+        } on StateError catch (e) {
+          Navigator.pop(context);
+          BinderTreeView._showScrivenerModeError(context, e.message);
+        }
+      }
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -510,6 +629,7 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
             hintText: type == BinderItemType.folder ? 'Chapter 1' : 'Scene 1',
           ),
           autofocus: true,
+          onSubmitted: (_) => doAdd(),
         ),
         actions: [
           TextButton(
@@ -517,21 +637,7 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              if (controller.text.isNotEmpty) {
-                try {
-                  context.read<ScrivenerService>().addBinderItem(
-                        title: controller.text,
-                        type: type,
-                        parentId: parentId,
-                      );
-                  Navigator.pop(context);
-                } on StateError catch (e) {
-                  Navigator.pop(context);
-                  BinderTreeView._showScrivenerModeError(context, e.message);
-                }
-              }
-            },
+            onPressed: doAdd,
             child: const Text('Add'),
           ),
         ],
@@ -541,6 +647,21 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
 
   void _showRenameDialog(BuildContext context) {
     final controller = TextEditingController(text: widget.item.title);
+
+    void doRename() {
+      if (controller.text.isNotEmpty) {
+        try {
+          context.read<ScrivenerService>().renameBinderItem(
+                widget.item.id,
+                controller.text,
+              );
+          Navigator.pop(context);
+        } on StateError catch (e) {
+          Navigator.pop(context);
+          BinderTreeView._showScrivenerModeError(context, e.message);
+        }
+      }
+    }
 
     showDialog(
       context: context,
@@ -552,6 +673,7 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
             labelText: 'Name',
           ),
           autofocus: true,
+          onSubmitted: (_) => doRename(),
         ),
         actions: [
           TextButton(
@@ -559,20 +681,7 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              if (controller.text.isNotEmpty) {
-                try {
-                  context.read<ScrivenerService>().renameBinderItem(
-                        widget.item.id,
-                        controller.text,
-                      );
-                  Navigator.pop(context);
-                } on StateError catch (e) {
-                  Navigator.pop(context);
-                  BinderTreeView._showScrivenerModeError(context, e.message);
-                }
-              }
-            },
+            onPressed: doRename,
             child: const Text('Rename'),
           ),
         ],
