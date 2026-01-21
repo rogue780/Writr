@@ -34,7 +34,8 @@ class BinderTreeView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               border: Border(
@@ -60,47 +61,56 @@ class BinderTreeView extends StatelessWidget {
                     ),
                   )
                 else
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.add, size: 20),
-                    tooltip: 'Add Item',
-                    onSelected: (value) {
-                      if (value == 'folder') {
-                        _showAddDialog(context, BinderItemType.folder, null);
-                      } else if (value == 'document') {
-                        _showAddDialog(context, BinderItemType.text, null);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'folder',
-                        child: Row(
-                          children: [
-                            Icon(Icons.folder, size: 18, color: Colors.blue),
-                            SizedBox(width: 8),
-                            Text('New Folder'),
-                          ],
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: PopupMenuButton<String>(
+                      icon: const Icon(Icons.add, size: 20),
+                      tooltip: 'Add Item',
+                      padding: EdgeInsets.zero,
+                      onSelected: (value) {
+                        if (value == 'folder') {
+                          _showAddDialog(context, BinderItemType.folder, null);
+                        } else if (value == 'document') {
+                          _showAddDialog(context, BinderItemType.text, null);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'folder',
+                          child: Row(
+                            children: [
+                              Icon(Icons.folder, size: 18, color: Colors.blue),
+                              SizedBox(width: 8),
+                              Text('New Folder'),
+                            ],
+                          ),
                         ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'document',
-                        child: Row(
-                          children: [
-                            Icon(Icons.description, size: 18, color: Colors.grey),
-                            SizedBox(width: 8),
-                            Text('New Document'),
-                          ],
+                        const PopupMenuItem(
+                          value: 'document',
+                          child: Row(
+                            children: [
+                              Icon(Icons.description, size: 18, color: Colors.grey),
+                              SizedBox(width: 8),
+                              Text('New Document'),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 if (onClose != null) ...[
                   const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left, size: 20),
-                    tooltip: 'Hide Binder',
-                    onPressed: onClose,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: IconButton(
+                      icon: const Icon(Icons.chevron_left, size: 20),
+                      tooltip: 'Hide Binder',
+                      onPressed: onClose,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
                   ),
                 ],
               ],

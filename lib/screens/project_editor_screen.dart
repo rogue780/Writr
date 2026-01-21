@@ -1445,21 +1445,50 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
   }
 
   void _openLinguisticAnalysis(ScrivenerService service) {
-    if (_selectedItem == null || _selectedItem!.isFolder) {
+    if (_selectedItem == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select a document to analyze')),
+        const SnackBar(content: Text('Select an item to analyze')),
       );
       return;
     }
 
-    final content =
-        service.currentProject?.textContents[_selectedItem!.id] ?? '';
+    final textContents = service.currentProject?.textContents ?? {};
+    final contentParts = <String>[];
+    var documentCount = 0;
+
+    // Recursively collect text content from item and all children
+    void collectContent(BinderItem item) {
+      if (item.isDocument) {
+        final text = textContents[item.id] ?? '';
+        if (text.isNotEmpty) {
+          contentParts.add(text);
+          documentCount++;
+        }
+      }
+      for (final child in item.children) {
+        collectContent(child);
+      }
+    }
+
+    collectContent(_selectedItem!);
+
+    if (contentParts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No text content to analyze')),
+      );
+      return;
+    }
+
+    final combinedContent = contentParts.join('\n\n');
+    final title = documentCount > 1
+        ? '${_selectedItem!.title} ($documentCount documents)'
+        : _selectedItem!.title;
 
     showDialog(
       context: context,
       builder: (context) => LinguisticAnalysisDialog(
-        text: content,
-        documentTitle: _selectedItem!.title,
+        text: combinedContent,
+        documentTitle: title,
       ),
     );
   }

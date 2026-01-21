@@ -364,7 +364,7 @@ class _LinguisticAnalysisPanelState extends State<LinguisticAnalysisPanel> {
 }
 
 /// Dialog for displaying full linguistic analysis
-class LinguisticAnalysisDialog extends StatelessWidget {
+class LinguisticAnalysisDialog extends StatefulWidget {
   final String text;
   final String documentTitle;
 
@@ -375,11 +375,26 @@ class LinguisticAnalysisDialog extends StatelessWidget {
   });
 
   @override
+  State<LinguisticAnalysisDialog> createState() => _LinguisticAnalysisDialogState();
+}
+
+class _LinguisticAnalysisDialogState extends State<LinguisticAnalysisDialog> {
+  List<LinguisticHighlight> _highlights = [];
+
+  void _onHighlightsChanged(List<LinguisticHighlight> highlights) {
+    setState(() {
+      _highlights = highlights;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Dialog(
       child: Container(
-        width: 500,
-        height: 600,
+        width: 800,
+        height: 700,
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,7 +405,7 @@ class LinguisticAnalysisDialog extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Analysis: $documentTitle',
+                    'Analysis: ${widget.documentTitle}',
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -406,8 +421,76 @@ class LinguisticAnalysisDialog extends StatelessWidget {
             ),
             const Divider(),
             Expanded(
-              child: SingleChildScrollView(
-                child: LinguisticAnalysisPanel(text: text),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Left side: Analysis panel
+                  SizedBox(
+                    width: 280,
+                    child: SingleChildScrollView(
+                      child: LinguisticAnalysisPanel(
+                        text: widget.text,
+                        onHighlightsChanged: _onHighlightsChanged,
+                      ),
+                    ),
+                  ),
+                  const VerticalDivider(width: 32),
+                  // Right side: Highlighted text preview
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text(
+                              'Text Preview',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const Spacer(),
+                            if (_highlights.isNotEmpty)
+                              Text(
+                                '${_highlights.length} highlights',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceContainerLowest,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: theme.dividerColor,
+                              ),
+                            ),
+                            child: SingleChildScrollView(
+                              child: SelectableText.rich(
+                                TextSpan(
+                                  children: _highlights.buildHighlightedSpans(
+                                    widget.text,
+                                    TextStyle(
+                                      fontSize: 14,
+                                      height: 1.6,
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
