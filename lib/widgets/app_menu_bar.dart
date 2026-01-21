@@ -552,6 +552,12 @@ class AppMenuBar extends StatelessWidget {
           label: 'Custom Fields...',
           onTap: onCustomFields,
         ),
+        const _MenuDivider(),
+        _MenuItem(
+          icon: Icons.settings,
+          label: 'Settings...',
+          onTap: onSettings,
+        ),
       ],
     );
   }

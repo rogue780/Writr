@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/preferences_service.dart';
+import '../services/theme_service.dart';
+import 'theme_selector.dart';
 
 /// Settings modal dialog for configuring app preferences
 class SettingsModal extends StatefulWidget {
@@ -368,62 +370,10 @@ class _GeneralSettingsTab extends StatelessWidget {
 class _AppearanceSettingsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Consumer<PreferencesService>(
-      builder: (context, prefs, child) {
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _buildSectionHeader('Theme'),
-            const SizedBox(height: 8),
-            _buildThemeModeSelector(context, prefs),
-          ],
-        );
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return ThemeSelector(themeService: themeService);
       },
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.bold,
-        color: Colors.grey,
-      ),
-    );
-  }
-
-  Widget _buildThemeModeSelector(
-      BuildContext context, PreferencesService prefs) {
-    return RadioGroup<String>(
-      groupValue: prefs.themeMode,
-      onChanged: (value) {
-        if (value != null) {
-          prefs.setThemeMode(value);
-        }
-      },
-      child: const Column(
-        children: [
-          RadioListTile<String>(
-            title: Text('System Default'),
-            subtitle: Text('Follow system theme settings'),
-            value: 'system',
-            contentPadding: EdgeInsets.zero,
-          ),
-          RadioListTile<String>(
-            title: Text('Light'),
-            subtitle: Text('Always use light theme'),
-            value: 'light',
-            contentPadding: EdgeInsets.zero,
-          ),
-          RadioListTile<String>(
-            title: Text('Dark'),
-            subtitle: Text('Always use dark theme'),
-            value: 'dark',
-            contentPadding: EdgeInsets.zero,
-          ),
-        ],
-      ),
     );
   }
 }

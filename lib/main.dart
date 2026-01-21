@@ -10,6 +10,7 @@ import 'services/recent_projects_service.dart';
 import 'services/cloud_sync_service.dart';
 import 'services/web_storage_service.dart';
 import 'services/preferences_service.dart';
+import 'services/theme_service.dart';
 import 'widgets/orientation_policy.dart';
 
 void main() {
@@ -36,6 +37,13 @@ class WritrApp extends StatelessWidget {
             return prefs;
           },
         ),
+        ChangeNotifierProvider(
+          create: (_) {
+            final themeService = ThemeService();
+            themeService.initialize();
+            return themeService;
+          },
+        ),
         ChangeNotifierProxyProvider<CloudStorageService, CloudSyncService>(
           create: (context) =>
               CloudSyncService(context.read<CloudStorageService>()),
@@ -43,26 +51,27 @@ class WritrApp extends StatelessWidget {
               previous ?? CloudSyncService(cloudStorage),
         ),
       ],
-      child: MaterialApp(
-        title: 'Writr - Scrivener Editor',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-          useMaterial3: true,
-        ),
-        builder: (context, child) {
-          return OrientationPolicy(
-            child: child ?? const SizedBox.shrink(),
+      child: Consumer<ThemeService>(
+        builder: (context, themeService, child) {
+          return MaterialApp(
+            title: 'Writr - Scrivener Editor',
+            theme: themeService.themeData,
+            builder: (context, child) {
+              return OrientationPolicy(
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            supportedLocales: const [
+              Locale('en', 'US'),
+            ],
+            home: const HomeScreen(),
           );
         },
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-        ],
-        supportedLocales: const [
-          Locale('en', 'US'),
-        ],
-        home: const HomeScreen(),
       ),
     );
   }
