@@ -27,7 +27,6 @@ import '../widgets/research_viewer.dart';
 import '../widgets/search_panel.dart';
 import '../widgets/collection_list.dart';
 import '../widgets/app_menu_bar.dart';
-import '../widgets/simplified_toolbar.dart';
 import '../widgets/edge_panel_handle.dart';
 import '../utils/web_download.dart';
 import '../services/statistics_service.dart';
@@ -47,6 +46,7 @@ import 'template_selector_screen.dart';
 import '../widgets/keyword_selector.dart';
 import '../widgets/custom_metadata_editor.dart';
 import '../widgets/linguistic_overlay.dart';
+import '../widgets/settings_modal.dart';
 import '../services/project_converter.dart';
 
 class ProjectEditorScreen extends StatefulWidget {
@@ -152,19 +152,6 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         final hasUnsavedChanges = service.hasUnsavedChanges;
         final hasProject = service.currentProject != null;
         final useMobileUi = _useMobileUi(context);
-        final toolbarStyle = prefs.toolbarStyle;
-
-        // Calculate target progress
-        double? targetProgress;
-        final dailyTarget = _targetService.dailyTarget;
-        if (dailyTarget != null && hasProject) {
-          final progress = _targetService.getTargetProgress(
-            dailyTarget,
-            service.currentProject!,
-          );
-          targetProgress = progress.progress;
-        }
-
         final colorScheme = Theme.of(context).colorScheme;
 
         // Keyboard shortcuts are handled by _handleGlobalKeyEvent registered in initState
@@ -178,15 +165,12 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                 : null,
             body: Column(
               children: [
-                // Toolbar - either menu bar or simplified
+                // Toolbar - always use menu bar (simplified toolbar disabled for now)
                 ColoredBox(
-                  color: toolbarStyle == ToolbarStyle.menuBar
-                      ? colorScheme.surfaceContainerHighest
-                      : colorScheme.surface,
+                  color: colorScheme.surfaceContainerHighest,
                   child: SafeArea(
                     bottom: false,
-                    child: toolbarStyle == ToolbarStyle.menuBar
-                        ? AppMenuBar(
+                    child: AppMenuBar(
                             projectName: projectName,
                             hasUnsavedChanges: hasUnsavedChanges,
                             projectMode: service.projectMode,
@@ -205,8 +189,6 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                             onSaveAs: () => _saveProjectAs(service),
                             onOpenProject: () => _openProject(service),
                             onNewProject: () => _newProject(service),
-                            onExport: kIsWeb ? _exportProject : null,
-                            onImport: kIsWeb ? _importProject : null,
                             onBackups: () => _openBackupManager(service),
                             onConvertToWritr: service.isScrivenerMode
                                 ? () => _convertToWritr(service)
@@ -264,6 +246,12 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                             onTemplateManager: _openTemplateManager,
                             onInsertTemplate: () =>
                                 _insertFromTemplate(service),
+                            onToggleScrivenerFullEditing:
+                                service.projectMode == ProjectMode.scrivener
+                                    ? () => _toggleScrivenerFullEditing(service)
+                                    : null,
+                            scrivenerFullEditingUnlocked:
+                                service.isFullEditingUnlocked,
                             onCompositionMode: () =>
                                 _openCompositionMode(service),
                             onNameGenerator: _openNameGenerator,
@@ -271,96 +259,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                                 _openLinguisticAnalysis(service),
                             onKeywordManager: _openKeywordManager,
                             onCustomFields: _openCustomFieldManager,
-                            onSwitchToSimplifiedToolbar: () {
-                              prefs.setToolbarStyle(ToolbarStyle.simplified);
-                            },
-                          )
-                        : SimplifiedToolbar(
-                            projectName: projectName,
-                            hasUnsavedChanges: hasUnsavedChanges,
-                            projectMode: service.projectMode,
-                            viewMode: _viewMode,
-                            showBinder:
-                                useMobileUi ? _pinBinderOnMobile : _showBinder,
-                            showInspector: useMobileUi
-                                ? _pinInspectorOnMobile
-                                : _showInspector,
-                            showSearch: _showSearch,
-                            showCollections:
-                                useMobileUi ? false : _showCollections,
-                            splitEditorEnabled:
-                                _splitEditorState.isSplitEnabled,
-                            targetProgress: targetProgress,
-                            onViewModeChanged: (mode) =>
-                                setState(() => _viewMode = mode),
-                            onToggleBinder: () {
-                              if (useMobileUi) {
-                                if (!hasProject) {
-                                  return;
-                                }
-                                if (_pinBinderOnMobile) {
-                                  setState(() => _pinBinderOnMobile = false);
-                                  return;
-                                }
-                                _toggleBinderDrawer(context);
-                                return;
-                              }
-                              setState(() => _showBinder = !_showBinder);
-                            },
-                            onToggleInspector: () {
-                              if (useMobileUi) {
-                                if (!hasProject) {
-                                  return;
-                                }
-                                if (_pinInspectorOnMobile) {
-                                  setState(() => _pinInspectorOnMobile = false);
-                                  return;
-                                }
-                                _toggleInspectorDrawer(context);
-                                return;
-                              }
-                              setState(() => _showInspector = !_showInspector);
-                            },
-                            onToggleSearch: () =>
-                                setState(() => _showSearch = !_showSearch),
-                            onToggleCollections: useMobileUi
-                                ? null
-                                : () => setState(
-                                      () =>
-                                          _showCollections = !_showCollections,
-                                    ),
-                            onToggleSplitEditor:
-                                useMobileUi ? null : _toggleSplitEditor,
-                            onSave: _saveProject,
-                            onSaveAs: () => _saveProjectAs(service),
-                            onOpenProject: () => _openProject(service),
-                            onNewProject: () => _newProject(service),
-                            onExport: kIsWeb ? _exportProject : null,
-                            onImport: kIsWeb ? _importProject : null,
-                            onBackups: () => _openBackupManager(service),
-                            onConvertToWritr: service.isScrivenerMode
-                                ? () => _convertToWritr(service)
-                                : null,
-                            onCompile: service.currentProject != null
-                                ? () =>
-                                    _openCompileScreen(service.currentProject!)
-                                : null,
-                            onTargets: () => _openTargetsDialog(service),
-                            onSessionTarget: () => _startSessionTarget(service),
-                            onStatistics: () => _openStatistics(service),
-                            onTemplateManager: _openTemplateManager,
-                            onInsertTemplate: () =>
-                                _insertFromTemplate(service),
-                            onCompositionMode: () =>
-                                _openCompositionMode(service),
-                            onNameGenerator: _openNameGenerator,
-                            onLinguisticAnalysis: () =>
-                                _openLinguisticAnalysis(service),
-                            onKeywordManager: _openKeywordManager,
-                            onCustomFields: _openCustomFieldManager,
-                            onSwitchToMenuBar: () {
-                              prefs.setToolbarStyle(ToolbarStyle.menuBar);
-                            },
+                            onSettings: () => SettingsModal.show(context),
                           ),
                   ),
                 ),
@@ -502,6 +401,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
               },
               selectedItem: _selectedItem,
               projectMode: service.projectMode,
+              isFullEditingUnlocked: service.isFullEditingUnlocked,
             ),
           ),
         ],
@@ -566,6 +466,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         },
         onClose: _closeOpenDrawerIfAny,
         projectMode: service.projectMode,
+        isFullEditingUnlocked: service.isFullEditingUnlocked,
       ),
     );
   }
@@ -689,67 +590,40 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                 ),
               // Binder resize handle
               if (showBinderPane)
-                MouseRegion(
-                  cursor: SystemMouseCursors.resizeColumn,
-                  child: GestureDetector(
-                    onHorizontalDragUpdate: (details) {
-                      final nextWidth =
-                          (prefs.binderWidth + details.delta.dx).clamp(
-                        _minPanelWidth,
-                        _maxPanelWidth,
-                      );
-                      setState(() {
-                        prefs.setBinderWidth(nextWidth, persist: false);
-                      });
-                    },
-                    onHorizontalDragEnd: (_) {
-                      prefs.setBinderWidth(prefs.binderWidth);
-                    },
-                    child: Container(
-                      width: 8,
-                      color: Colors.transparent,
-                      child: Center(
-                        child: Container(
-                          width: 1,
-                          color: Theme.of(context).dividerColor,
-                        ),
-                      ),
-                    ),
-                  ),
+                _ResizeHandle(
+                  onDrag: (delta) {
+                    final nextWidth =
+                        (prefs.binderWidth + delta).clamp(
+                      _minPanelWidth,
+                      _maxPanelWidth,
+                    );
+                    setState(() {
+                      prefs.setBinderWidth(nextWidth, persist: false);
+                    });
+                  },
+                  onDragEnd: () {
+                    prefs.setBinderWidth(prefs.binderWidth);
+                  },
                 ),
               Expanded(
                 child: _buildMainContent(service),
               ),
               // Inspector resize handle
               if (showInspectorPane)
-                MouseRegion(
-                  cursor: SystemMouseCursors.resizeColumn,
-                  child: GestureDetector(
-                    onHorizontalDragUpdate: (details) {
-                      final nextWidth =
-                          (prefs.inspectorWidth - details.delta.dx).clamp(
-                        _minPanelWidth,
-                        _maxPanelWidth,
-                      );
-                      setState(() {
-                        // Drag left increases width, drag right decreases
-                        prefs.setInspectorWidth(nextWidth, persist: false);
-                      });
-                    },
-                    onHorizontalDragEnd: (_) {
-                      prefs.setInspectorWidth(prefs.inspectorWidth);
-                    },
-                    child: Container(
-                      width: 8,
-                      color: Colors.transparent,
-                      child: Center(
-                        child: Container(
-                          width: 1,
-                          color: Theme.of(context).dividerColor,
-                        ),
-                      ),
-                    ),
-                  ),
+                _ResizeHandle(
+                  onDrag: (delta) {
+                    final nextWidth =
+                        (prefs.inspectorWidth - delta).clamp(
+                      _minPanelWidth,
+                      _maxPanelWidth,
+                    );
+                    setState(() {
+                      prefs.setInspectorWidth(nextWidth, persist: false);
+                    });
+                  },
+                  onDragEnd: () {
+                    prefs.setInspectorWidth(prefs.inspectorWidth);
+                  },
                 ),
               // Inspector Panel
               if (showInspectorPane)
@@ -790,6 +664,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
       selectedItem: _selectedItem,
       onClose: useMobileUi ? null : () => setState(() => _showBinder = false),
       projectMode: service.projectMode,
+      isFullEditingUnlocked: service.isFullEditingUnlocked,
     );
 
     if (!showHeader) {
@@ -922,6 +797,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         });
       },
       projectMode: service.projectMode,
+      isFullEditingUnlocked: service.isFullEditingUnlocked,
     );
   }
 
@@ -1029,6 +905,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         rtfContent: rtfContent,
         hasUnsavedChanges: service.hasUnsavedChanges,
         pageViewMode: context.watch<PreferencesService>().pageViewMode,
+        isFullEditingUnlocked: service.isFullEditingUnlocked,
         onPageViewModeChanged: (enabled) {
           context.read<PreferencesService>().setPageViewMode(enabled);
         },
@@ -1459,6 +1336,44 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _toggleScrivenerFullEditing(ScrivenerService service) async {
+    if (service.isFullEditingUnlocked) {
+      // Lock it back
+      service.lockFullEditing();
+      return;
+    }
+
+    // Show warning dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.warning_amber, color: Colors.orange, size: 48),
+        title: const Text('Enable Full Editing?'),
+        content: const Text(
+          'This will allow structural changes (adding, renaming, deleting documents) '
+          'to this Scrivener project.\n\n'
+          'Warning: These changes may not be fully compatible with Scrivener. '
+          'Consider converting to Writr format for full compatibility.\n\n'
+          'Do you want to continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Enable Full Editing'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      service.unlockFullEditing();
+    }
   }
 
   void _insertFromTemplate(ScrivenerService service) {
@@ -2448,6 +2363,61 @@ class _TargetsManagementDialogState extends State<_TargetsManagementDialog> {
             child: const Text('Delete'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A resize handle widget with hover feedback for panel resizing
+class _ResizeHandle extends StatefulWidget {
+  final void Function(double delta) onDrag;
+  final VoidCallback onDragEnd;
+
+  const _ResizeHandle({
+    required this.onDrag,
+    required this.onDragEnd,
+  });
+
+  @override
+  State<_ResizeHandle> createState() => _ResizeHandleState();
+}
+
+class _ResizeHandleState extends State<_ResizeHandle> {
+  bool _isHovered = false;
+  bool _isDragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = _isHovered || _isDragging;
+    final theme = Theme.of(context);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onHorizontalDragStart: (_) => setState(() => _isDragging = true),
+        onHorizontalDragUpdate: (details) => widget.onDrag(details.delta.dx),
+        onHorizontalDragEnd: (_) {
+          setState(() => _isDragging = false);
+          widget.onDragEnd();
+        },
+        child: Container(
+          width: 8,
+          color: Colors.transparent,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: isActive ? 4 : 1,
+              decoration: BoxDecoration(
+                color: isActive
+                    ? theme.colorScheme.primary.withValues(alpha: 0.7)
+                    : theme.dividerColor,
+                borderRadius: isActive ? BorderRadius.circular(2) : null,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

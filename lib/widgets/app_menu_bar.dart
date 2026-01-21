@@ -16,8 +16,6 @@ class AppMenuBar extends StatelessWidget {
   final VoidCallback? onSaveAs;
   final VoidCallback? onOpenProject;
   final VoidCallback? onNewProject;
-  final VoidCallback? onExport;
-  final VoidCallback? onImport;
   final VoidCallback? onBackups;
   final VoidCallback? onConvertToWritr;
   final VoidCallback? onClose;
@@ -47,6 +45,8 @@ class AppMenuBar extends StatelessWidget {
   final VoidCallback? onStatistics;
   final VoidCallback? onTemplateManager;
   final VoidCallback? onInsertTemplate;
+  final VoidCallback? onToggleScrivenerFullEditing;
+  final bool scrivenerFullEditingUnlocked;
 
   // Tools menu callbacks
   final VoidCallback? onCompositionMode;
@@ -54,9 +54,8 @@ class AppMenuBar extends StatelessWidget {
   final VoidCallback? onLinguisticAnalysis;
   final VoidCallback? onKeywordManager;
   final VoidCallback? onCustomFields;
+  final VoidCallback? onSettings;
 
-  // Settings
-  final VoidCallback? onSwitchToSimplifiedToolbar;
 
   const AppMenuBar({
     super.key,
@@ -70,8 +69,6 @@ class AppMenuBar extends StatelessWidget {
     this.onSaveAs,
     this.onOpenProject,
     this.onNewProject,
-    this.onExport,
-    this.onImport,
     this.onBackups,
     this.onConvertToWritr,
     this.onClose,
@@ -98,14 +95,15 @@ class AppMenuBar extends StatelessWidget {
     this.onStatistics,
     this.onTemplateManager,
     this.onInsertTemplate,
+    this.onToggleScrivenerFullEditing,
+    this.scrivenerFullEditingUnlocked = false,
     // Tools
     this.onCompositionMode,
     this.onNameGenerator,
     this.onLinguisticAnalysis,
     this.onKeywordManager,
     this.onCustomFields,
-    // Settings
-    this.onSwitchToSimplifiedToolbar,
+    this.onSettings,
   });
 
   @override
@@ -127,17 +125,14 @@ class AppMenuBar extends StatelessWidget {
           _buildViewMenu(context),
           _buildProjectMenu(context),
           _buildToolsMenu(context),
-          if (showViewModeToggle && onViewModeChanged != null) ...[
-            const SizedBox(width: 8),
-            Container(
-              width: 1,
-              height: 20,
-              color: Theme.of(context).dividerColor,
-            ),
-            const SizedBox(width: 8),
-            _buildViewModeToggle(context),
-          ],
-          const Spacer(),
+          // Divider after menus
+          const SizedBox(width: 8),
+          Container(
+            width: 1,
+            height: 20,
+            color: Theme.of(context).dividerColor,
+          ),
+          const SizedBox(width: 8),
           // Project name with unsaved indicator
           if (projectName != null) ...[
             Text(
@@ -168,20 +163,21 @@ class AppMenuBar extends StatelessWidget {
             ],
             const SizedBox(width: 12),
           ],
+          const Spacer(),
           // Mode indicator
           _buildModeIndicator(context),
-          const SizedBox(width: 8),
-          // Switch to simplified toolbar option
-          if (onSwitchToSimplifiedToolbar != null)
-            TextButton.icon(
-              onPressed: onSwitchToSimplifiedToolbar,
-              icon: const Icon(Icons.view_compact, size: 16),
-              label: const Text('Simplified', style: TextStyle(fontSize: 12)),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                visualDensity: VisualDensity.compact,
-              ),
+          // View mode toggle (moved to right side after mode indicator)
+          if (showViewModeToggle && onViewModeChanged != null) ...[
+            const SizedBox(width: 8),
+            Container(
+              width: 1,
+              height: 20,
+              color: Theme.of(context).dividerColor,
             ),
+            const SizedBox(width: 8),
+            _buildViewModeToggle(context),
+          ],
+          const SizedBox(width: 8),
         ],
       ),
     );
@@ -229,44 +225,68 @@ class AppMenuBar extends StatelessWidget {
   }
 
   Widget _buildModeIndicator(BuildContext context) {
-    final isScrivenerMode = projectMode == ProjectMode.scrivener;
+    final isScrivenerProject = projectMode == ProjectMode.scrivener;
+    final isUnlocked = isScrivenerProject && scrivenerFullEditingUnlocked;
+    final isLocked = isScrivenerProject && !scrivenerFullEditingUnlocked;
+
+    // Determine colors based on state
+    final Color backgroundColor;
+    final Color borderColor;
+    final Color iconAndTextColor;
+    final IconData icon;
+    final String label;
+    final String tooltip;
+
+    if (isUnlocked) {
+      // Scrivener project with full editing unlocked - green
+      backgroundColor = Colors.green.withValues(alpha: 0.2);
+      borderColor = Colors.green.shade700;
+      iconAndTextColor = Colors.green.shade800;
+      icon = Icons.lock_open;
+      label = 'Scrivener';
+      tooltip = 'Scrivener Mode: Full editing enabled (changes may not be Scrivener-compatible)';
+    } else if (isLocked) {
+      // Scrivener project locked - amber
+      backgroundColor = Colors.amber.withValues(alpha: 0.2);
+      borderColor = Colors.amber.shade700;
+      iconAndTextColor = Colors.amber.shade800;
+      icon = Icons.lock_outline;
+      label = 'Scrivener';
+      tooltip = 'Scrivener Mode: Only text editing allowed to preserve project integrity';
+    } else {
+      // Native Writr project
+      backgroundColor = Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5);
+      borderColor = Theme.of(context).colorScheme.primary.withValues(alpha: 0.5);
+      iconAndTextColor = Theme.of(context).colorScheme.primary;
+      icon = Icons.edit_note;
+      label = 'Writr';
+      tooltip = 'Writr Mode: Full editing capabilities';
+    }
 
     return Tooltip(
-      message: isScrivenerMode
-          ? 'Scrivener Mode: Only text editing allowed to preserve project integrity'
-          : 'Writr Mode: Full editing capabilities',
+      message: tooltip,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: isScrivenerMode
-              ? Colors.amber.withValues(alpha: 0.2)
-              : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
+          color: backgroundColor,
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(
-            color: isScrivenerMode
-                ? Colors.amber.shade700
-                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-          ),
+          border: Border.all(color: borderColor),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              isScrivenerMode ? Icons.lock_outline : Icons.edit_note,
+              icon,
               size: 12,
-              color: isScrivenerMode
-                  ? Colors.amber.shade800
-                  : Theme.of(context).colorScheme.primary,
+              color: iconAndTextColor,
             ),
             const SizedBox(width: 4),
             Text(
-              isScrivenerMode ? 'Scrivener' : 'Writr',
+              label,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                color: isScrivenerMode
-                    ? Colors.amber.shade800
-                    : Theme.of(context).colorScheme.primary,
+                color: iconAndTextColor,
               ),
             ),
           ],
@@ -313,17 +333,6 @@ class AppMenuBar extends StatelessWidget {
           ),
         if (projectMode == ProjectMode.scrivener)
           const _MenuDivider(),
-        _MenuItem(
-          icon: Icons.download,
-          label: 'Export Project...',
-          onTap: onExport,
-        ),
-        _MenuItem(
-          icon: Icons.upload,
-          label: 'Import Project...',
-          onTap: onImport,
-        ),
-        const _MenuDivider(),
         _MenuItem(
           icon: Icons.backup,
           label: 'Backup Manager...',
@@ -499,6 +508,14 @@ class AppMenuBar extends StatelessWidget {
           label: 'Insert from Template...',
           onTap: onInsertTemplate,
         ),
+        if (projectMode == ProjectMode.scrivener) ...[
+          const _MenuDivider(),
+          _MenuCheckItem(
+            label: 'Allow Full Editing',
+            checked: scrivenerFullEditingUnlocked,
+            onTap: onToggleScrivenerFullEditing,
+          ),
+        ],
       ],
     );
   }
@@ -555,6 +572,7 @@ class _MenuBarButton extends StatelessWidget {
     return PopupMenuButton<VoidCallback>(
       tooltip: '',
       offset: const Offset(0, 32),
+      popUpAnimationStyle: AnimationStyle.noAnimation,
       onSelected: (callback) => callback(),
       itemBuilder: (context) {
         final List<PopupMenuEntry<VoidCallback>> entries = [];
@@ -667,6 +685,7 @@ class _MenuBarButton extends StatelessWidget {
     return PopupMenuButton<VoidCallback>(
       tooltip: '',
       offset: const Offset(200, 0),
+      popUpAnimationStyle: AnimationStyle.noAnimation,
       onSelected: (callback) {
         callback();
         Navigator.pop(context); // Close parent menu

@@ -22,6 +22,7 @@ class ScrivenerEditor extends StatefulWidget {
   final bool hasUnsavedChanges;
   final bool pageViewMode;
   final Function(bool)? onPageViewModeChanged;
+  final bool isFullEditingUnlocked;
 
   const ScrivenerEditor({
     super.key,
@@ -33,6 +34,7 @@ class ScrivenerEditor extends StatefulWidget {
     this.hasUnsavedChanges = false,
     this.pageViewMode = false,
     this.onPageViewModeChanged,
+    this.isFullEditingUnlocked = false,
   });
 
   @override
@@ -301,20 +303,27 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
   }
 
   Widget _buildHeader(BuildContext context) {
+    final isUnlocked = widget.isFullEditingUnlocked;
+    final backgroundColor = isUnlocked
+        ? Colors.green.withValues(alpha: 0.1)
+        : Colors.amber.withValues(alpha: 0.1);
+    final borderColor = isUnlocked ? Colors.green.shade300 : Colors.amber.shade300;
+    final iconColor = isUnlocked ? Colors.green.shade700 : Colors.amber.shade700;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.amber.withValues(alpha: 0.1),
+        color: backgroundColor,
         border: Border(
-          bottom: BorderSide(color: Colors.amber.shade300),
+          bottom: BorderSide(color: borderColor),
         ),
       ),
       child: Row(
         children: [
           Icon(
-            Icons.lock_outline,
+            isUnlocked ? Icons.lock_open : Icons.lock_outline,
             size: 20,
-            color: Colors.amber.shade700,
+            color: iconColor,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -331,21 +340,29 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: Colors.amber.withValues(alpha: 0.2),
+              color: isUnlocked
+                  ? Colors.green.withValues(alpha: 0.2)
+                  : Colors.amber.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.amber.shade700),
+              border: Border.all(
+                color: isUnlocked ? Colors.green.shade700 : Colors.amber.shade700,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.edit, size: 12, color: Colors.amber.shade800),
+                Icon(
+                  Icons.edit,
+                  size: 12,
+                  color: isUnlocked ? Colors.green.shade800 : Colors.amber.shade800,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   'RTF Mode',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
-                    color: Colors.amber.shade800,
+                    color: isUnlocked ? Colors.green.shade800 : Colors.amber.shade800,
                   ),
                 ),
               ],
@@ -370,7 +387,14 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
   }
 
   Widget _buildToolbar(BuildContext context) {
+    // Use constrained IconButtons with 48dp touch targets (Material Design guideline)
+    const iconButtonConstraints = BoxConstraints(
+      minWidth: 40,
+      minHeight: 40,
+    );
+
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         border: Border(
@@ -388,6 +412,7 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
             ),
             tooltip: 'Undo (Ctrl+Z)',
             onPressed: canUndo ? undo : null,
+            constraints: iconButtonConstraints,
           ),
           IconButton(
             icon: Icon(
@@ -397,35 +422,43 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
             ),
             tooltip: 'Redo (Ctrl+Y)',
             onPressed: canRedo ? redo : null,
+            constraints: iconButtonConstraints,
           ),
           Container(
             width: 1,
             height: 24,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
             color: Theme.of(context).dividerColor,
           ),
+          // Formatting buttons
           IconButton(
             icon: const Icon(Icons.format_bold, size: 20),
             tooltip: 'Bold',
             onPressed: () => _toggleAttributions({boldAttribution}),
+            constraints: iconButtonConstraints,
           ),
           IconButton(
             icon: const Icon(Icons.format_italic, size: 20),
             tooltip: 'Italic',
             onPressed: () => _toggleAttributions({italicsAttribution}),
+            constraints: iconButtonConstraints,
           ),
           IconButton(
             icon: const Icon(Icons.format_underline, size: 20),
             tooltip: 'Underline',
             onPressed: () => _toggleAttributions({underlineAttribution}),
+            constraints: iconButtonConstraints,
           ),
           IconButton(
             icon: const Icon(Icons.format_strikethrough, size: 20),
             tooltip: 'Strikethrough',
             onPressed: () => _toggleAttributions({strikethroughAttribution}),
+            constraints: iconButtonConstraints,
           ),
           Container(
             width: 1,
             height: 24,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
             color: Theme.of(context).dividerColor,
           ),
           // Superscript/subscript
@@ -433,35 +466,32 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
             icon: const Icon(Icons.superscript, size: 20),
             tooltip: 'Superscript',
             onPressed: () => _toggleAttributions({superscriptAttribution}),
+            constraints: iconButtonConstraints,
           ),
           IconButton(
             icon: const Icon(Icons.subscript, size: 20),
             tooltip: 'Subscript',
             onPressed: () => _toggleAttributions({subscriptAttribution}),
+            constraints: iconButtonConstraints,
           ),
-          Container(
-            width: 1,
-            height: 24,
-            color: Theme.of(context).dividerColor,
-          ),
-          // Page view toggle
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: IconButton(
-              icon: Icon(
-                widget.pageViewMode ? Icons.article : Icons.article_outlined,
-                size: 20,
-              ),
-              onPressed: () {
-                widget.onPageViewModeChanged?.call(!widget.pageViewMode);
-              },
-              tooltip: widget.pageViewMode
-                  ? 'Switch to Standard View'
-                  : 'Switch to Page View',
-              color: widget.pageViewMode
-                  ? Theme.of(context).colorScheme.primary
-                  : null,
+          // Spacer to push page view to the right
+          const Spacer(),
+          // Page view toggle (right-justified)
+          IconButton(
+            icon: Icon(
+              widget.pageViewMode ? Icons.article : Icons.article_outlined,
+              size: 20,
             ),
+            onPressed: () {
+              widget.onPageViewModeChanged?.call(!widget.pageViewMode);
+            },
+            tooltip: widget.pageViewMode
+                ? 'Switch to Standard View'
+                : 'Switch to Page View',
+            color: widget.pageViewMode
+                ? Theme.of(context).colorScheme.primary
+                : null,
+            constraints: iconButtonConstraints,
           ),
         ],
       ),
@@ -521,8 +551,16 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
     );
 
     if (widget.pageViewMode) {
+      final isDarkMode = theme.brightness == Brightness.dark;
+      final backgroundColor = isDarkMode
+          ? theme.colorScheme.surfaceContainerLow
+          : Colors.grey[300];
+      final pageColor = isDarkMode
+          ? theme.colorScheme.surfaceContainerHighest
+          : Colors.white;
+
       return Container(
-        color: Colors.grey[300],
+        color: backgroundColor,
         child: Center(
           child: Container(
             constraints: const BoxConstraints(maxWidth: _pageMaxWidth),
@@ -531,10 +569,10 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
               vertical: 24,
             ),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: pageColor,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
+                  color: Colors.black.withValues(alpha: isDarkMode ? 0.3 : 0.15),
                   blurRadius: 10,
                   offset: const Offset(0, 2),
                 ),

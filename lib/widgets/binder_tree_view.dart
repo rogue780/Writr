@@ -10,6 +10,7 @@ class BinderTreeView extends StatelessWidget {
   final BinderItem? selectedItem;
   final VoidCallback? onClose;
   final ProjectMode projectMode;
+  final bool isFullEditingUnlocked;
 
   const BinderTreeView({
     super.key,
@@ -18,9 +19,12 @@ class BinderTreeView extends StatelessWidget {
     this.selectedItem,
     this.onClose,
     this.projectMode = ProjectMode.native,
+    this.isFullEditingUnlocked = false,
   });
 
-  bool get isScrivenerMode => projectMode == ProjectMode.scrivener;
+  /// Returns true if in Scrivener mode AND full editing is not unlocked
+  bool get isScrivenerMode =>
+      projectMode == ProjectMode.scrivener && !isFullEditingUnlocked;
 
   @override
   Widget build(BuildContext context) {
@@ -114,6 +118,7 @@ class BinderTreeView extends StatelessWidget {
                   selectedItem: selectedItem,
                   depth: 0,
                   projectMode: projectMode,
+                  isFullEditingUnlocked: isFullEditingUnlocked,
                 );
               }).toList(),
             ),
@@ -237,6 +242,7 @@ class _BinderItemWidget extends StatefulWidget {
   final BinderItem? selectedItem;
   final int depth;
   final ProjectMode projectMode;
+  final bool isFullEditingUnlocked;
 
   const _BinderItemWidget({
     required this.item,
@@ -244,9 +250,12 @@ class _BinderItemWidget extends StatefulWidget {
     this.selectedItem,
     required this.depth,
     this.projectMode = ProjectMode.native,
+    this.isFullEditingUnlocked = false,
   });
 
-  bool get isScrivenerMode => projectMode == ProjectMode.scrivener;
+  /// Returns true if in Scrivener mode AND full editing is not unlocked
+  bool get isScrivenerMode =>
+      projectMode == ProjectMode.scrivener && !isFullEditingUnlocked;
 
   @override
   State<_BinderItemWidget> createState() => _BinderItemWidgetState();
@@ -332,6 +341,7 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
               selectedItem: widget.selectedItem,
               depth: widget.depth + 1,
               projectMode: widget.projectMode,
+              isFullEditingUnlocked: widget.isFullEditingUnlocked,
             );
           }),
       ],

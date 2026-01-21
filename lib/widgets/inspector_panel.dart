@@ -20,6 +20,7 @@ class InspectorPanel extends StatefulWidget {
   final VoidCallback? onTogglePinned;
   final VoidCallback? onClose;
   final ProjectMode projectMode;
+  final bool isFullEditingUnlocked;
 
   const InspectorPanel({
     super.key,
@@ -35,9 +36,12 @@ class InspectorPanel extends StatefulWidget {
     this.onTogglePinned,
     this.onClose,
     this.projectMode = ProjectMode.native,
+    this.isFullEditingUnlocked = false,
   });
 
-  bool get isScrivenerMode => projectMode == ProjectMode.scrivener;
+  /// Returns true if in Scrivener mode AND full editing is not unlocked
+  bool get isScrivenerMode =>
+      projectMode == ProjectMode.scrivener && !isFullEditingUnlocked;
 
   @override
   State<InspectorPanel> createState() => _InspectorPanelState();
@@ -154,9 +158,19 @@ class _InspectorPanelState extends State<InspectorPanel>
             const SizedBox(width: 8),
           ],
           Icon(
-            widget.isScrivenerMode ? Icons.lock_outline : Icons.info_outline,
+            widget.isScrivenerMode
+                ? Icons.lock_outline
+                : (widget.projectMode == ProjectMode.scrivener &&
+                        widget.isFullEditingUnlocked)
+                    ? Icons.lock_open
+                    : Icons.info_outline,
             size: 20,
-            color: widget.isScrivenerMode ? Colors.amber.shade700 : null,
+            color: widget.isScrivenerMode
+                ? Colors.amber.shade700
+                : (widget.projectMode == ProjectMode.scrivener &&
+                        widget.isFullEditingUnlocked)
+                    ? Colors.green.shade700
+                    : null,
           ),
           const SizedBox(width: 8),
           Expanded(

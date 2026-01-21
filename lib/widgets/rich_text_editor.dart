@@ -376,7 +376,14 @@ class RichTextEditorState extends State<RichTextEditor> {
   }
 
   Widget _buildToolbar(BuildContext context) {
+    // Use constrained IconButtons with 48dp touch targets (Material Design guideline)
+    const iconButtonConstraints = BoxConstraints(
+      minWidth: 40,
+      minHeight: 40,
+    );
+
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         border: Border(
@@ -385,67 +392,88 @@ class RichTextEditorState extends State<RichTextEditor> {
       ),
       child: Row(
         children: [
+          // Undo/Redo buttons
+          IconButton(
+            icon: Icon(
+              Icons.undo,
+              size: 20,
+              color: canUndo ? null : Theme.of(context).disabledColor,
+            ),
+            tooltip: 'Undo (Ctrl+Z)',
+            onPressed: canUndo ? undo : null,
+            constraints: iconButtonConstraints,
+          ),
+          IconButton(
+            icon: Icon(
+              Icons.redo,
+              size: 20,
+              color: canRedo ? null : Theme.of(context).disabledColor,
+            ),
+            tooltip: 'Redo (Ctrl+Y)',
+            onPressed: canRedo ? redo : null,
+            constraints: iconButtonConstraints,
+          ),
+          // Divider after undo/redo
+          Container(
+            width: 1,
+            height: 24,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            color: Theme.of(context).dividerColor,
+          ),
+          // Formatting buttons
           IconButton(
             icon: const Icon(Icons.format_bold, size: 20),
             tooltip: 'Bold',
             onPressed: () => _toggleAttributions({boldAttribution}),
+            constraints: iconButtonConstraints,
           ),
           IconButton(
             icon: const Icon(Icons.format_italic, size: 20),
             tooltip: 'Italic',
             onPressed: () => _toggleAttributions({italicsAttribution}),
+            constraints: iconButtonConstraints,
           ),
           IconButton(
             icon: const Icon(Icons.format_underline, size: 20),
             tooltip: 'Underline',
             onPressed: () => _toggleAttributions({underlineAttribution}),
+            constraints: iconButtonConstraints,
           ),
           IconButton(
             icon: const Icon(Icons.format_strikethrough, size: 20),
             tooltip: 'Strikethrough',
             onPressed: () => _toggleAttributions({strikethroughAttribution}),
+            constraints: iconButtonConstraints,
           ),
-          // Divider
-          Container(
-            width: 1,
-            height: 24,
-            color: Theme.of(context).dividerColor,
-          ),
-          // Page view toggle
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: IconButton(
-              icon: Icon(
-                widget.pageViewMode ? Icons.article : Icons.article_outlined,
-                size: 20,
-              ),
-              onPressed: () {
-                widget.onPageViewModeChanged?.call(!widget.pageViewMode);
-              },
-              tooltip: widget.pageViewMode
-                  ? 'Switch to Standard View'
-                  : 'Switch to Page View',
-              color: widget.pageViewMode
-                  ? Theme.of(context).colorScheme.primary
-                  : null,
+          // Spacer to push page view and comments to the right
+          const Spacer(),
+          // Page view toggle (right-justified)
+          IconButton(
+            icon: Icon(
+              widget.pageViewMode ? Icons.article : Icons.article_outlined,
+              size: 20,
             ),
+            onPressed: () {
+              widget.onPageViewModeChanged?.call(!widget.pageViewMode);
+            },
+            tooltip: widget.pageViewMode
+                ? 'Switch to Standard View'
+                : 'Switch to Page View',
+            color: widget.pageViewMode
+                ? Theme.of(context).colorScheme.primary
+                : null,
+            constraints: iconButtonConstraints,
           ),
-          // Add comment button
+          // Add comment button (right-justified)
           if (widget.onAddComment != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: IconButton(
-                icon: const Icon(Icons.add_comment, size: 20),
-                onPressed: _showAddCommentDialog,
-                tooltip: 'Add Comment',
-              ),
+            IconButton(
+              icon: const Icon(Icons.add_comment, size: 20),
+              onPressed: _showAddCommentDialog,
+              tooltip: 'Add Comment',
+              constraints: iconButtonConstraints,
             ),
-          // Comments panel toggle
-          if (widget.comments.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: _buildCommentsButton(context),
-            ),
+          // Comments panel toggle (right-justified)
+          if (widget.comments.isNotEmpty) _buildCommentsButton(context),
         ],
       ),
     );
@@ -731,8 +759,16 @@ class RichTextEditorState extends State<RichTextEditor> {
     );
 
     if (widget.pageViewMode) {
+      final isDarkMode = theme.brightness == Brightness.dark;
+      final backgroundColor = isDarkMode
+          ? theme.colorScheme.surfaceContainerLow
+          : Colors.grey[300];
+      final pageColor = isDarkMode
+          ? theme.colorScheme.surfaceContainerHighest
+          : Colors.white;
+
       return Container(
-        color: Colors.grey[300],
+        color: backgroundColor,
         child: Center(
           child: Container(
             constraints: const BoxConstraints(maxWidth: _pageMaxWidth),
@@ -741,10 +777,10 @@ class RichTextEditorState extends State<RichTextEditor> {
               vertical: 24,
             ),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: pageColor,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
+                  color: Colors.black.withValues(alpha: isDarkMode ? 0.3 : 0.15),
                   blurRadius: 10,
                   offset: const Offset(0, 2),
                 ),

@@ -41,12 +41,16 @@ class ScrivenerService extends ChangeNotifier {
   // Project mode - determines what operations are allowed.
   ProjectMode _projectMode = ProjectMode.native;
 
+  // Temporary unlock for full editing in Scrivener mode
+  bool _fullEditingUnlocked = false;
+
   ScrivenerProject? get currentProject => _currentProject;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get hasUnsavedChanges => _hasUnsavedChanges;
   ProjectMode get projectMode => _projectMode;
   bool get isScrivenerMode => _projectMode == ProjectMode.scrivener;
+  bool get isFullEditingUnlocked => _fullEditingUnlocked;
 
   /// Clear the unsaved changes flag (used when saving via WritrService).
   void clearUnsavedChanges() {
@@ -54,12 +58,25 @@ class ScrivenerService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Enable full editing for Scrivener projects (user has been warned).
+  void unlockFullEditing() {
+    _fullEditingUnlocked = true;
+    notifyListeners();
+  }
+
+  /// Disable full editing and restore Scrivener mode restrictions.
+  void lockFullEditing() {
+    _fullEditingUnlocked = false;
+    notifyListeners();
+  }
+
   /// Throws [StateError] if in Scrivener mode - used to block structural changes.
   ///
   /// In Scrivener mode, only text content edits are allowed to prevent
-  /// corrupting imported Scrivener projects.
+  /// corrupting imported Scrivener projects. This check is bypassed if
+  /// the user has unlocked full editing.
   void _ensureNotScrivenerMode(String operation) {
-    if (_projectMode == ProjectMode.scrivener) {
+    if (_projectMode == ProjectMode.scrivener && !_fullEditingUnlocked) {
       throw StateError(
         'Cannot $operation in Scrivener-compatible mode. '
         'Convert to Writr format (.writ) to make structural changes.',
@@ -84,6 +101,7 @@ class ScrivenerService extends ChangeNotifier {
     _allowScrivxRewrite = false;
     _scrivxDirty = false;
     _projectMode = ProjectMode.scrivener; // Imported Scrivener project - restricted mode
+    _fullEditingUnlocked = false; // Reset unlock when loading new project
     notifyListeners();
 
     try {
