@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:super_editor/super_editor.dart';
 import '../models/rtf_metadata.dart';
+import 'scrivener_style_decoder.dart';
 
 // ============================================================================
 // RTF Tokenization
@@ -349,10 +350,162 @@ class RtfConversionResult {
   /// Extracted metadata (font table, color table) for round-trip.
   final RtfMetadata metadata;
 
+  /// Scrivener style tag data for each paragraph (for round-trip preservation).
+  /// Only populated if decodeScrivenerTags() was called.
+  final List<ScrivenerDecodedText>? scrivenerTagData;
+
   const RtfConversionResult({
     required this.paragraphs,
     required this.metadata,
+    this.scrivenerTagData,
   });
+
+  /// Decode Scrivener style tags from the text, removing them from display
+  /// but preserving them for round-trip. Returns a new result with clean text
+  /// and applied formatting.
+  RtfConversionResult decodeScrivenerTags() {
+    final decodedParagraphs = <AttributedText>[];
+    final tagData = <ScrivenerDecodedText>[];
+
+    for (final paragraph in paragraphs) {
+      final text = paragraph.toPlainText();
+      final decoded = ScrivenerStyleDecoder.decode(text);
+      tagData.add(decoded);
+
+      if (!decoded.hasTags) {
+        // No tags, keep original paragraph
+        decodedParagraphs.add(paragraph);
+        continue;
+      }
+
+      // Build new attributed text with tags removed and styles applied
+      final newSpans = AttributedSpans();
+
+      // First, copy existing attributions, adjusting positions for removed tags
+      _copyAttributionsWithTagRemoval(paragraph, decoded, newSpans);
+
+      // Then apply Scrivener style formatting
+      _applyScrivenerStyles(decoded, newSpans);
+
+      decodedParagraphs.add(AttributedText(decoded.cleanText, newSpans));
+    }
+
+    return RtfConversionResult(
+      paragraphs: decodedParagraphs,
+      metadata: metadata,
+      scrivenerTagData: tagData,
+    );
+  }
+
+  /// Copy attributions from original paragraph, adjusting positions for removed tags
+  static void _copyAttributionsWithTagRemoval(
+    AttributedText original,
+    ScrivenerDecodedText decoded,
+    AttributedSpans newSpans,
+  ) {
+    final originalText = original.toPlainText();
+    if (originalText.isEmpty || decoded.cleanText.isEmpty) return;
+
+    // Build a mapping from original positions to clean positions
+    final positionMap = <int, int>{};
+    var cleanPos = 0;
+    var origPos = 0;
+
+    // Sort tags by start position
+    final sortedTags = decoded.tags.toList()
+      ..sort((a, b) => a.startOffset.compareTo(b.startOffset));
+
+    var tagIndex = 0;
+
+    while (origPos < originalText.length) {
+      // Check if we're at a tag
+      if (tagIndex < sortedTags.length &&
+          origPos == sortedTags[tagIndex].startOffset) {
+        // Skip the tag
+        origPos = sortedTags[tagIndex].endOffset;
+        tagIndex++;
+        continue;
+      }
+
+      positionMap[origPos] = cleanPos;
+      origPos++;
+      cleanPos++;
+    }
+
+    // Get all attribution spans and copy them with adjusted positions
+    final allSpans = original.getAttributionSpansByFilter((_) => true);
+
+    for (final span in allSpans) {
+      final newStart = positionMap[span.start];
+      final newEnd = positionMap[span.end];
+
+      if (newStart != null && newEnd != null && newStart <= newEnd) {
+        newSpans.addAttribution(
+          newAttribution: span.attribution,
+          start: newStart,
+          end: newEnd,
+        );
+      }
+    }
+  }
+
+  /// Apply Scrivener styles based on decoded tags
+  static void _applyScrivenerStyles(
+    ScrivenerDecodedText decoded,
+    AttributedSpans spans,
+  ) {
+    // Track active character styles with their start positions
+    final activeCharStyles = <int, int>{}; // styleIndex -> startPosition
+
+    // Sort all tag positions
+    final sortedPositions = decoded.tagPositions.keys.toList()..sort();
+
+    for (final pos in sortedPositions) {
+      final tagsAtPos = decoded.tagPositions[pos]!;
+
+      for (final tag in tagsAtPos) {
+        if (tag.type == ScrivenerTagType.characterStyle) {
+          if (tag.isEnd) {
+            // End of character style - apply formatting from start to here
+            final startPos = activeCharStyles.remove(tag.styleIndex);
+            if (startPos != null && pos > startPos) {
+              final style =
+                  ScrivenerStyleMappings.getCharacterStyle(tag.styleIndex);
+              if (style != null) {
+                for (final attr in style.toAttributions()) {
+                  spans.addAttribution(
+                    newAttribution: attr,
+                    start: startPos,
+                    end: pos - 1, // SuperEditor uses inclusive end
+                  );
+                }
+              }
+            }
+          } else {
+            // Start of character style
+            activeCharStyles[tag.styleIndex] = pos;
+          }
+        }
+        // Paragraph styles apply to the whole paragraph
+        // They're handled separately when rendering
+      }
+    }
+
+    // Close any unclosed character styles at end of text
+    final textLength = decoded.cleanText.length;
+    for (final entry in activeCharStyles.entries) {
+      final style = ScrivenerStyleMappings.getCharacterStyle(entry.key);
+      if (style != null && textLength > entry.value) {
+        for (final attr in style.toAttributions()) {
+          spans.addAttribution(
+            newAttribution: attr,
+            start: entry.value,
+            end: textLength - 1,
+          );
+        }
+      }
+    }
+  }
 }
 
 /// Converts RTF content to SuperEditor's AttributedText with full formatting.

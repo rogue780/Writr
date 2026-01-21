@@ -293,7 +293,7 @@ void main() {
     });
 
     test('preserves font table from metadata', () {
-      final metadata = RtfMetadata(
+      const metadata = RtfMetadata(
         fontTable: [
           const RtfFont(index: 0, name: 'Arial', family: 'swiss'),
           const RtfFont(index: 1, name: 'Times New Roman', family: 'roman'),
@@ -309,7 +309,7 @@ void main() {
     });
 
     test('preserves color table from metadata', () {
-      final metadata = RtfMetadata(
+      const metadata = RtfMetadata(
         colorTable: [
           null, // auto
           const Color.fromARGB(255, 255, 0, 0), // red
@@ -398,7 +398,7 @@ void main() {
 
   group('RtfMetadata', () {
     test('getFontByIndex returns correct font', () {
-      final metadata = RtfMetadata(
+      const metadata = RtfMetadata(
         fontTable: [
           const RtfFont(index: 0, name: 'Arial'),
           const RtfFont(index: 1, name: 'Times'),
@@ -411,7 +411,7 @@ void main() {
     });
 
     test('getColorByIndex returns correct color', () {
-      final metadata = RtfMetadata(
+      const metadata = RtfMetadata(
         colorTable: [
           null,
           const Color.fromARGB(255, 255, 0, 0),
@@ -424,7 +424,7 @@ void main() {
     });
 
     test('indexOfColor finds existing color', () {
-      final metadata = RtfMetadata(
+      const metadata = RtfMetadata(
         colorTable: [
           null,
           const Color.fromARGB(255, 255, 0, 0),
@@ -438,7 +438,7 @@ void main() {
     });
 
     test('indexOfFont finds existing font', () {
-      final metadata = RtfMetadata(
+      const metadata = RtfMetadata(
         fontTable: [
           const RtfFont(index: 0, name: 'Arial'),
           const RtfFont(index: 1, name: 'Times'),

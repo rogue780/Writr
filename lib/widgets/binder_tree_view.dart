@@ -34,7 +34,7 @@ class BinderTreeView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               border: Border(
@@ -47,10 +47,7 @@ class BinderTreeView extends StatelessWidget {
               children: [
                 const Text(
                   'Binder',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 if (isScrivenerMode)
@@ -538,7 +535,7 @@ class _BinderItemWidgetState extends State<_BinderItemWidget> {
         ),
       ],
     ).then((value) {
-      if (value == null || !mounted) return;
+      if (value == null || !context.mounted) return;
       switch (value) {
         case 'add_folder':
           _showAddDialog(context, BinderItemType.folder, widget.item.id);

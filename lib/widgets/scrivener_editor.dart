@@ -4,6 +4,7 @@ import 'package:super_editor/super_editor.dart';
 import '../models/rtf_metadata.dart';
 import '../models/scrivener_project.dart';
 import '../utils/rtf_attributed_text.dart';
+import '../utils/scrivener_style_decoder.dart';
 import 'super_editor_style_phases.dart';
 
 /// A specialized rich text editor for Scrivener mode that properly handles
@@ -58,6 +59,8 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
   String _lastSavedContent = '';
 
   RtfMetadata _rtfMetadata = RtfMetadata.empty();
+  // ignore: unused_field
+  List<ScrivenerDecodedText>? _scrivenerTagData;
   bool _hasUnsavedChanges = false;
   bool _isInitializing = true;
 
@@ -92,9 +95,18 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
 
     // Convert RTF to AttributedText with formatting
     final converter = RtfToAttributedText(widget.rtfContent);
-    final result = converter.convert();
+    var result = converter.convert();
+
+    // Decode Scrivener style tags (e.g., <$Scr_Cs::2>) and apply formatting.
+    // Note: These tags are display-only placeholders that Scrivener uses for
+    // compile-time styling. We strip them for clean display but preserve
+    // the data so we could potentially restore them on save.
+    result = result.decodeScrivenerTags();
 
     _rtfMetadata = widget.metadata ?? result.metadata;
+    // Store tag data for potential round-trip (currently informational only -
+    // if text is edited, tags won't be restored as positions would be invalid)
+    _scrivenerTagData = result.scrivenerTagData;
 
     // Create document from paragraphs
     _document = MutableDocument(
@@ -241,9 +253,9 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
     // Remove listener temporarily
     _document.removeListener(_onDocumentChangeLog);
 
-    // Convert RTF to AttributedText
+    // Convert RTF to AttributedText and decode Scrivener style tags
     final converter = RtfToAttributedText(rtfContent);
-    final result = converter.convert();
+    final result = converter.convert().decodeScrivenerTags();
 
     // Clear and rebuild document
     while (_document.nodeCount > 0) {
