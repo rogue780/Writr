@@ -295,8 +295,8 @@ void main() {
     test('preserves font table from metadata', () {
       const metadata = RtfMetadata(
         fontTable: [
-          const RtfFont(index: 0, name: 'Arial', family: 'swiss'),
-          const RtfFont(index: 1, name: 'Times New Roman', family: 'roman'),
+          RtfFont(index: 0, name: 'Arial', family: 'swiss'),
+          RtfFont(index: 1, name: 'Times New Roman', family: 'roman'),
         ],
       );
       final paragraphs = [AttributedText('Text')];
@@ -312,7 +312,7 @@ void main() {
       const metadata = RtfMetadata(
         colorTable: [
           null, // auto
-          const Color.fromARGB(255, 255, 0, 0), // red
+          Color.fromARGB(255, 255, 0, 0), // red
         ],
       );
       final paragraphs = [AttributedText('Text')];
@@ -400,8 +400,8 @@ void main() {
     test('getFontByIndex returns correct font', () {
       const metadata = RtfMetadata(
         fontTable: [
-          const RtfFont(index: 0, name: 'Arial'),
-          const RtfFont(index: 1, name: 'Times'),
+          RtfFont(index: 0, name: 'Arial'),
+          RtfFont(index: 1, name: 'Times'),
         ],
       );
 
@@ -414,7 +414,7 @@ void main() {
       const metadata = RtfMetadata(
         colorTable: [
           null,
-          const Color.fromARGB(255, 255, 0, 0),
+          Color.fromARGB(255, 255, 0, 0),
         ],
       );
 
@@ -427,8 +427,8 @@ void main() {
       const metadata = RtfMetadata(
         colorTable: [
           null,
-          const Color.fromARGB(255, 255, 0, 0),
-          const Color.fromARGB(255, 0, 255, 0),
+          Color.fromARGB(255, 255, 0, 0),
+          Color.fromARGB(255, 0, 255, 0),
         ],
       );
 
@@ -440,8 +440,8 @@ void main() {
     test('indexOfFont finds existing font', () {
       const metadata = RtfMetadata(
         fontTable: [
-          const RtfFont(index: 0, name: 'Arial'),
-          const RtfFont(index: 1, name: 'Times'),
+          RtfFont(index: 0, name: 'Arial'),
+          RtfFont(index: 1, name: 'Times'),
         ],
       );
 

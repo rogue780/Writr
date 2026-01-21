@@ -38,7 +38,7 @@ void main() {
       });
 
       test('parses mixed tags', () {
-        final text =
+        const text =
             '<\$Scr_Ps::0>NOVEL FORMAT<!\$Scr_Ps::0><\$Scr_Ps::1>About This Template<!\$Scr_Ps::1>';
         final tags = ScrivenerStyleDecoder.parseTags(text);
 

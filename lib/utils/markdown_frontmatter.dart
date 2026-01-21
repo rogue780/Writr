@@ -224,16 +224,32 @@ String writeMarkdownWithFrontmatter({
 
 /// Check if a string value needs to be quoted in YAML.
 bool _needsQuoting(String value) {
-  if (value.isEmpty) return true;
-  if (value.startsWith(' ') || value.endsWith(' ')) return true;
-  if (value.contains(':') || value.contains('#')) return true;
-  if (value.contains('"') || value.contains("'")) return true;
+  if (value.isEmpty) {
+    return true;
+  }
+  if (value.startsWith(' ') || value.endsWith(' ')) {
+    return true;
+  }
+  if (value.contains(':') || value.contains('#')) {
+    return true;
+  }
+  if (value.contains('"') || value.contains("'")) {
+    return true;
+  }
 
   // Check if it looks like a number or boolean
-  if (int.tryParse(value) != null) return true;
-  if (double.tryParse(value) != null) return true;
-  if (value.toLowerCase() == 'true' || value.toLowerCase() == 'false') return true;
-  if (value.toLowerCase() == 'null') return true;
+  if (int.tryParse(value) != null) {
+    return true;
+  }
+  if (double.tryParse(value) != null) {
+    return true;
+  }
+  if (value.toLowerCase() == 'true' || value.toLowerCase() == 'false') {
+    return true;
+  }
+  if (value.toLowerCase() == 'null') {
+    return true;
+  }
 
   return false;
 }
