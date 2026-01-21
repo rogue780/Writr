@@ -1,10 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:super_editor/super_editor.dart';
 import '../models/comment.dart';
 import '../models/scrivener_project.dart';
+import '../services/dictionary_service.dart';
+import '../services/preferences_service.dart';
+import '../services/spell_check_service.dart';
 import '../utils/super_editor_markdown.dart';
 import 'comment_bubble.dart';
+import 'spell_check_style_phase.dart';
 import 'super_editor_style_phases.dart';
 
 /// Rich text editor widget using SuperEditor for formatting support.
@@ -75,6 +80,11 @@ class RichTextEditorState extends State<RichTextEditor> {
   static const double _pageMaxWidth = 800.0;
   static const double _pageMinMargin = 40.0;
 
+  // Spell check
+  SpellCheckService? _spellCheckService;
+  SpellCheckStylePhase? _spellCheckStylePhase;
+  bool _spellCheckInitialized = false;
+
   @override
   void initState() {
     super.initState();
@@ -89,6 +99,50 @@ class RichTextEditorState extends State<RichTextEditor> {
     _customStylePhases = [ClampInvalidTextSelectionStylePhase()];
     _showCommentMargin = widget.showCommentMargin;
     _initializeEditor();
+    _initSpellCheck();
+  }
+
+  Future<void> _initSpellCheck() async {
+    try {
+      final dictionary = await DictionaryService.getInstance();
+      if (!mounted) return;
+
+      _spellCheckService = SpellCheckService(dictionary);
+      _spellCheckStylePhase = SpellCheckStylePhase(
+        spellCheckService: _spellCheckService!,
+        enabled: true,
+      );
+
+      // Listen for spell check updates
+      _spellCheckService!.addListener(_onSpellCheckUpdate);
+
+      setState(() {
+        _spellCheckInitialized = true;
+        // Add spell check phase to custom phases
+        _customStylePhases.add(_spellCheckStylePhase!);
+      });
+
+      // Initial spell check
+      _triggerSpellCheck();
+    } catch (e) {
+      // Spell check initialization failed - continue without it
+      debugPrint('Spell check initialization failed: $e');
+    }
+  }
+
+  void _onSpellCheckUpdate() {
+    if (!mounted || _spellCheckStylePhase == null) return;
+
+    // Sync errors to the style phase and trigger rebuild
+    _spellCheckStylePhase!.syncErrors(_document);
+    setState(() {});
+  }
+
+  void _triggerSpellCheck() {
+    if (_spellCheckService == null || !_spellCheckInitialized) return;
+
+    final text = _document.toPlainText();
+    _spellCheckService!.checkText(text);
   }
 
   void _initializeEditor() {
@@ -175,6 +229,8 @@ class RichTextEditorState extends State<RichTextEditor> {
   @override
   void dispose() {
     _document.removeListener(_onDocumentChangeLog);
+    _spellCheckService?.removeListener(_onSpellCheckUpdate);
+    _spellCheckService?.dispose();
     _document.dispose();
     _composer.dispose();
     _androidControlsController.dispose();
@@ -208,6 +264,9 @@ class RichTextEditorState extends State<RichTextEditor> {
 
     widget.onContentChanged(newContent);
     widget.onDocumentChanged?.call(_document);
+
+    // Trigger spell check
+    _triggerSpellCheck();
   }
 
   /// Whether undo is available
@@ -724,6 +783,10 @@ class RichTextEditorState extends State<RichTextEditor> {
   Widget _buildEditor(BuildContext context) {
     final theme = Theme.of(context);
     final stylesheet = _buildEditorStylesheet(theme);
+
+    // Update spell check enabled state from preferences
+    final prefs = context.watch<PreferencesService>();
+    _spellCheckStylePhase?.setEnabled(prefs.spellCheckEnabled);
 
     final editor = Stack(
       children: [

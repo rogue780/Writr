@@ -12,7 +12,9 @@
       "Bash(grep:*)",
       "Bash(git checkout:*)",
       "Bash(flutter build:*)",
-      "Bash(flutter clean:*)"
+      "Bash(flutter clean:*)",
+      "Bash(dir \"%LOCALAPPDATA%\\\\Pub\\\\Cache\\\\hosted\\\\pub.dev\")",
+      "Bash(findstr:*)"
     ]
   }
 }

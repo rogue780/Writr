@@ -1,9 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:super_editor/super_editor.dart';
 import '../models/scrivener_project.dart';
+import '../services/dictionary_service.dart';
+import '../services/preferences_service.dart';
+import '../services/spell_check_service.dart' as spell;
 import '../utils/super_editor_markdown.dart';
+import '../widgets/spell_check_style_phase.dart';
 import '../widgets/super_editor_style_phases.dart';
 
 /// Full-screen distraction-free composition mode
@@ -49,6 +54,11 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
   int _initialWordCount = 0;
   final DateTime _sessionStart = DateTime.now();
 
+  // Spell check
+  spell.SpellCheckService? _spellCheckService;
+  SpellCheckStylePhase? _spellCheckStylePhase;
+  bool _spellCheckInitialized = false;
+
   @override
   void initState() {
     super.initState();
@@ -58,9 +68,46 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
     _initializeEditor();
     _initialWordCount = _countWords(_document.toPlainText());
     _startHideUITimer();
+    _initSpellCheck();
 
     // Enter full screen mode
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  Future<void> _initSpellCheck() async {
+    try {
+      final dictionary = await DictionaryService.getInstance();
+      if (!mounted) return;
+
+      _spellCheckService = spell.SpellCheckService(dictionary);
+      _spellCheckStylePhase = SpellCheckStylePhase(
+        spellCheckService: _spellCheckService!,
+        enabled: true,
+      );
+
+      _spellCheckService!.addListener(_onSpellCheckUpdate);
+
+      setState(() {
+        _spellCheckInitialized = true;
+        _customStylePhases.add(_spellCheckStylePhase!);
+      });
+
+      _triggerSpellCheck();
+    } catch (e) {
+      debugPrint('Spell check initialization failed: $e');
+    }
+  }
+
+  void _onSpellCheckUpdate() {
+    if (!mounted || _spellCheckStylePhase == null) return;
+    _spellCheckStylePhase!.syncErrors(_document);
+    setState(() {});
+  }
+
+  void _triggerSpellCheck() {
+    if (_spellCheckService == null || !_spellCheckInitialized) return;
+    final text = _document.toPlainText();
+    _spellCheckService!.checkText(text);
   }
 
   void _initializeEditor() {
@@ -105,6 +152,8 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
   void dispose() {
     _hideUITimer?.cancel();
     _document.removeListener(_onDocumentChangeLog);
+    _spellCheckService?.removeListener(_onSpellCheckUpdate);
+    _spellCheckService?.dispose();
     _document.dispose();
     _composer.dispose();
     _focusNode.dispose();
@@ -127,6 +176,9 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
     setState(() {
       _sessionWordCount = currentWordCount - _initialWordCount;
     });
+
+    // Trigger spell check on document changes
+    _triggerSpellCheck();
   }
 
   void _startHideUITimer() {
@@ -218,6 +270,10 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
   }
 
   Widget _buildEditor() {
+    // Update spell check based on preferences
+    final prefs = context.watch<PreferencesService>();
+    _spellCheckStylePhase?.setEnabled(prefs.spellCheckEnabled);
+
     return Center(
       child: Container(
         width: _textWidth,
