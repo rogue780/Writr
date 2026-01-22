@@ -69,11 +69,13 @@ class SpellCheckStylePhase extends SingleColumnLayoutStylePhase {
 
           // Validate range is within node text
           if (localStart >= 0 && localEnd <= node.text.length) {
+            // DON'T access error.suggestions here - it triggers expensive computation!
+            // Suggestions are only needed for context menus, not for rendering underlines
             nodeErrors.add(TextError.spelling(
               nodeId: node.id,
               range: TextRange(start: localStart, end: localEnd),
               value: error.word,
-              suggestions: error.suggestions,
+              suggestions: const [], // Empty - load lazily when needed
             ));
           }
         }

@@ -61,7 +61,20 @@ class DictionaryService {
     }
 
     // Check main dictionary
-    return _words.contains(normalized);
+    if (_words.contains(normalized)) {
+      return true;
+    }
+
+    // For contractions (e.g., didn't, won't), try without apostrophe
+    // Dictionary has "didnt", "wont", etc. but not "didn't", "won't"
+    if (normalized.contains("'")) {
+      final withoutApostrophe = normalized.replaceAll("'", "");
+      if (_words.contains(withoutApostrophe)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /// Get spelling suggestions for a misspelled word
@@ -202,6 +215,12 @@ class DictionaryService {
 
   /// Get the number of words in the main dictionary
   int get wordCount => _words.length;
+
+  /// Get the main dictionary words set (for isolate use)
+  Set<String> get wordsSet => _words;
+
+  /// Get the user dictionary words set (for isolate use)
+  Set<String> get userWordsSet => _userWords;
 }
 
 class _ScoredWord {

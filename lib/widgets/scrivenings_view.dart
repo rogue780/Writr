@@ -43,7 +43,7 @@ class _ScriveningsViewState extends State<ScriveningsView> {
 
       final document = _createDocumentFromContent(content);
       final composer = MutableDocumentComposer();
-      final editor = createDefaultDocumentEditor(
+      final editor = createEditorWithoutLinkify(
         document: document,
         composer: composer,
       );
@@ -332,6 +332,16 @@ class _ScriveningsViewState extends State<ScriveningsView> {
           focusNode: controller.focusNode,
           stylesheet: _buildEditorStylesheet(theme),
           customStylePhases: controller.customStylePhases,
+          selectionStyle: SelectionStyles(
+            selectionColor: theme.colorScheme.primary.withValues(alpha: 0.3),
+          ),
+          documentOverlayBuilders: [
+            DefaultCaretOverlayBuilder(
+              caretStyle: CaretStyle(
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ],
         ),
       ),
       if (index < totalDocuments - 1)

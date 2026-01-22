@@ -92,7 +92,10 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
         _customStylePhases.add(_spellCheckStylePhase!);
       });
 
-      _triggerSpellCheck();
+      // Delay initial spell check to let UI render first
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) _triggerSpellCheck();
+      });
     } catch (e) {
       debugPrint('Spell check initialization failed: $e');
     }
@@ -113,7 +116,7 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
   void _initializeEditor() {
     _document = _createDocumentFromContent(widget.content);
     _composer = MutableDocumentComposer();
-    _editor = createDefaultDocumentEditor(
+    _editor = createEditorWithoutLinkify(
       document: _document,
       composer: _composer,
     );
@@ -290,6 +293,16 @@ class _CompositionModeScreenState extends State<CompositionModeScreen> {
                 documentLayoutKey: _documentLayoutKey,
                 stylesheet: _buildEditorStylesheet(),
                 customStylePhases: _customStylePhases,
+                selectionStyle: SelectionStyles(
+                  selectionColor: _textColor.withValues(alpha: 0.3),
+                ),
+                documentOverlayBuilders: [
+                  DefaultCaretOverlayBuilder(
+                    caretStyle: CaretStyle(
+                      color: _textColor,
+                    ),
+                  ),
+                ],
               ),
               if (_document.toPlainText().trim().isEmpty)
                 Positioned(

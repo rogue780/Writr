@@ -1,6 +1,28 @@
 import 'package:flutter/widgets.dart';
 import 'package:super_editor/super_editor.dart';
 
+/// Creates a document editor without auto-linkifying URLs.
+/// This prevents "said.no" from being turned into a hyperlink.
+Editor createEditorWithoutLinkify({
+  required MutableDocument document,
+  required MutableDocumentComposer composer,
+}) {
+  return Editor(
+    editables: {
+      Editor.documentKey: document,
+      Editor.composerKey: composer,
+    },
+    requestHandlers: [
+      ...defaultRequestHandlers,
+    ],
+    // Use default reactions but filter out LinkifyReaction
+    reactionPipeline: [
+      for (final reaction in defaultEditorReactions)
+        if (reaction is! LinkifyReaction) reaction,
+    ],
+  );
+}
+
 /// Sanitizes invalid text selections to avoid Flutter assertions in
 /// `TextPainter.getBoxesForSelection()` when selection offsets temporarily
 /// fall outside the valid range.

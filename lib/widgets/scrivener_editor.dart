@@ -116,8 +116,10 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
         _customStylePhases.add(_spellCheckStylePhase!);
       });
 
-      // Initial spell check
-      _triggerSpellCheck();
+      // Delay initial spell check to let UI render first
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) _triggerSpellCheck();
+      });
     } catch (e) {
       debugPrint('Spell check initialization failed: $e');
     }
@@ -174,7 +176,7 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
     }
 
     _composer = MutableDocumentComposer();
-    _editor = createDefaultDocumentEditor(
+    _editor = createEditorWithoutLinkify(
       document: _document,
       composer: _composer,
     );
@@ -601,6 +603,16 @@ class ScrivenerEditorState extends State<ScrivenerEditor> {
               documentLayoutKey: _documentLayoutKey,
               stylesheet: stylesheet,
               customStylePhases: _customStylePhases,
+              selectionStyle: SelectionStyles(
+                selectionColor: theme.colorScheme.primary.withValues(alpha: 0.3),
+              ),
+              documentOverlayBuilders: [
+                DefaultCaretOverlayBuilder(
+                  caretStyle: CaretStyle(
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
