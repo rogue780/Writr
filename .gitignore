@@ -47,3 +47,15 @@ app.*.map.json
 /android/local.properties
 /android/.gradle/
 /android/build/
+
+# Environment/secrets (never commit!)
+env.json
+.env
+*.env.local
+
+.claude/
+.github/
+
+# Test output (screenshots, logs)
+test_output/
+docs/

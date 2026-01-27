@@ -55,125 +55,163 @@ class _HomeScreenState extends State<HomeScreen> {
               style: TextStyle(fontSize: 16, color: Colors.grey),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 48),
-            // Info card about storage access
-            Card(
-              color: Colors.blue.shade50,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.blue.shade700),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Access Files Anywhere',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue.shade900,
-                          ),
-                        ),
-                      ],
+            const SizedBox(height: 32),
+            // Recent projects section (in a card box)
+            _buildRecentProjectsSection(context),
+            const SizedBox(height: 24),
+            // Open and Create buttons side by side
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showOpenProjectOptions(context),
+                    icon: const Icon(Icons.folder_open, size: 24),
+                    label: const Text(
+                      'Open Project',
+                      style: TextStyle(fontSize: 16),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Writr provides two ways to access your projects:\n\n'
-                      '1. Native File Picker (recommended):\n'
-                      '   • Local storage, network drives, external drives\n'
-                      '   • Works with installed cloud apps\n'
-                      '   • No setup required\n\n'
-                      '2. Direct Cloud API Access:\n'
-                      '   • Google Drive, Dropbox, OneDrive\n'
-                      '   • Requires API configuration\n'
-                      '   • Browse and manage cloud files',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.blue.shade900,
-                        height: 1.5,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            // Open existing project button
-            ElevatedButton.icon(
-              onPressed: () => _showOpenProjectOptions(context),
-              icon: const Icon(Icons.folder_open, size: 28),
-              label: const Text(
-                'Open Project',
-                style: TextStyle(fontSize: 18),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.all(20),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _createNewProject(context),
+                    icon: const Icon(Icons.add_circle_outline, size: 24),
+                    label: const Text(
+                      'Create New',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(height: 16),
-            // Create new project button
-            OutlinedButton.icon(
-              onPressed: () => _createNewProject(context),
-              icon: const Icon(Icons.add_circle_outline, size: 28),
-              label: const Text(
-                'Create New Project',
-                style: TextStyle(fontSize: 18),
-              ),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.all(20),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            // Currently open project info
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecentProjectsSection(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Currently open project
             Consumer<ScrivenerService>(
               builder: (context, service, child) {
                 if (service.currentProject != null) {
-                  return Card(
-                    elevation: 4,
-                    child: ListTile(
-                      leading: const Icon(Icons.book, color: Colors.deepPurple),
-                      title: Text(
-                        service.currentProject!.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: const Text('Currently open'),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.arrow_forward),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const ProjectEditorScreen(),
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.edit_document,
+                               size: 18,
+                               color: colorScheme.primary),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Currently Open',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.primary,
                             ),
-                          );
-                        },
+                          ),
+                        ],
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.book,
+                            color: colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                        title: Text(
+                          service.currentProject!.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        trailing: FilledButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ProjectEditorScreen(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.arrow_forward, size: 18),
+                          label: const Text('Continue'),
+                        ),
+                      ),
+                      const Divider(height: 24),
+                    ],
                   );
                 }
                 return const SizedBox.shrink();
               },
             ),
-            const SizedBox(height: 32),
-            // Recent projects section
+            // Recent projects list
             Consumer<RecentProjectsService>(
               builder: (context, recentService, child) {
                 if (!recentService.isLoaded) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
                 }
 
                 if (recentService.recentProjects.isEmpty) {
-                  return const SizedBox.shrink();
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.folder_open,
+                            size: 48,
+                            color: colorScheme.outline,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No recent projects',
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
                 }
 
                 return Column(
@@ -185,7 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         const Text(
                           'Recent Projects',
                           style: TextStyle(
-                            fontSize: 20,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -196,65 +234,46 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     ...recentService.recentProjects.map((project) {
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.deepPurple.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(
-                              Icons.book,
-                              color: Colors.deepPurple,
-                            ),
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          title: Text(
-                            project.name,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          child: Icon(
+                            Icons.book,
+                            color: colorScheme.onSurfaceVariant,
                           ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 4),
-                              Text(
-                                project.path,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                project.getRelativeTime(),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
-                            ],
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.close, size: 20),
-                            onPressed: () =>
-                                _removeRecentProject(context, project.path),
-                            tooltip: 'Remove from recent',
-                          ),
-                          onTap: () => _openRecentProject(context, project),
                         ),
+                        title: Text(
+                          project.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          project.getRelativeTime(),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close, size: 20),
+                          onPressed: () =>
+                              _removeRecentProject(context, project.path),
+                          tooltip: 'Remove from recent',
+                        ),
+                        onTap: () => _openRecentProject(context, project),
                       );
                     }),
                   ],
                 );
               },
             ),
-            ],
-          ),
+          ],
         ),
       ),
     );

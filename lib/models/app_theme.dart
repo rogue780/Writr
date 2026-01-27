@@ -1,5 +1,222 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+
+/// Simple 4-color theme definition that users can easily customize.
+/// All Material 3 color variations are auto-generated from these 4 base colors.
+class SimpleThemeColors {
+  final Color primary;
+  final Color secondary;
+  final Color background;
+  final Color text;
+
+  const SimpleThemeColors({
+    required this.primary,
+    required this.secondary,
+    required this.background,
+    required this.text,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'primary': _colorToHex(primary),
+        'secondary': _colorToHex(secondary),
+        'background': _colorToHex(background),
+        'text': _colorToHex(text),
+      };
+
+  factory SimpleThemeColors.fromJson(Map<String, dynamic> json) =>
+      SimpleThemeColors(
+        primary: _hexToColor(json['primary']),
+        secondary: _hexToColor(json['secondary']),
+        background: _hexToColor(json['background']),
+        text: _hexToColor(json['text']),
+      );
+
+  static String _colorToHex(Color color) =>
+      '#${color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
+
+  static Color _hexToColor(String hex) {
+    hex = hex.replaceFirst('#', '');
+    if (hex.length == 6) hex = 'FF$hex';
+    return Color(int.parse(hex, radix: 16));
+  }
+
+  SimpleThemeColors copyWith({
+    Color? primary,
+    Color? secondary,
+    Color? background,
+    Color? text,
+  }) {
+    return SimpleThemeColors(
+      primary: primary ?? this.primary,
+      secondary: secondary ?? this.secondary,
+      background: background ?? this.background,
+      text: text ?? this.text,
+    );
+  }
+}
+
+/// Extension methods for HSL color manipulation
+extension ColorHSL on Color {
+  /// Convert to HSL components (h: 0-360, s: 0-1, l: 0-1)
+  ({double h, double s, double l}) toHSL() {
+    // Use the new Flutter color API (r, g, b are 0-1 range)
+    final rVal = r;
+    final gVal = g;
+    final bVal = b;
+
+    final max = math.max(rVal, math.max(gVal, bVal));
+    final min = math.min(rVal, math.min(gVal, bVal));
+    final l = (max + min) / 2;
+
+    if (max == min) {
+      return (h: 0.0, s: 0.0, l: l);
+    }
+
+    final d = max - min;
+    final s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+
+    double h;
+    if (max == rVal) {
+      h = (gVal - bVal) / d + (gVal < bVal ? 6 : 0);
+    } else if (max == gVal) {
+      h = (bVal - rVal) / d + 2;
+    } else {
+      h = (rVal - gVal) / d + 4;
+    }
+    h *= 60;
+
+    return (h: h, s: s, l: l);
+  }
+
+  /// Create a color from HSL values
+  static Color fromHSL(double h, double s, double l, [double alpha = 1.0]) {
+    h = h % 360;
+    if (h < 0) h += 360;
+    s = s.clamp(0.0, 1.0);
+    l = l.clamp(0.0, 1.0);
+
+    if (s == 0) {
+      return Color.from(alpha: alpha, red: l, green: l, blue: l);
+    }
+
+    double hueToRgb(double p, double q, double t) {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    }
+
+    final q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    final p = 2 * l - q;
+    final hNorm = h / 360;
+
+    final rVal = hueToRgb(p, q, hNorm + 1 / 3);
+    final gVal = hueToRgb(p, q, hNorm);
+    final bVal = hueToRgb(p, q, hNorm - 1 / 3);
+
+    return Color.from(alpha: alpha, red: rVal, green: gVal, blue: bVal);
+  }
+
+  /// Adjust lightness by a delta (-1 to 1)
+  Color adjustLightness(double delta) {
+    final hsl = toHSL();
+    return ColorHSL.fromHSL(hsl.h, hsl.s, hsl.l + delta, a);
+  }
+
+  /// Adjust saturation by a delta (-1 to 1)
+  Color adjustSaturation(double delta) {
+    final hsl = toHSL();
+    return ColorHSL.fromHSL(hsl.h, hsl.s + delta, hsl.l, a);
+  }
+
+  /// Shift hue by degrees
+  Color shiftHue(double degrees) {
+    final hsl = toHSL();
+    return ColorHSL.fromHSL(hsl.h + degrees, hsl.s, hsl.l, a);
+  }
+
+  /// Get contrast color (black or white based on luminance)
+  Color contrastColor() {
+    return computeLuminance() > 0.5 ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
+  }
+}
+
+/// Generates all 31 Material 3 colors from 4 simple base colors
+class ThemeColorGenerator {
+  final SimpleThemeColors simpleColors;
+  final bool isDark;
+
+  const ThemeColorGenerator({
+    required this.simpleColors,
+    required this.isDark,
+  });
+
+  /// Generate the full AppThemeColors from 4 base colors
+  AppThemeColors generate() {
+    final primary = simpleColors.primary;
+    final secondary = simpleColors.secondary;
+    final background = simpleColors.background;
+    final text = simpleColors.text;
+
+    // Generate tertiary by shifting primary hue
+    final tertiary = primary.shiftHue(30);
+
+    // Container adjustments depend on light/dark mode
+    final containerDelta = isDark ? -0.15 : 0.25;
+    final onContainerDelta = isDark ? 0.35 : -0.35;
+
+    return AppThemeColors(
+      // Primary colors
+      primary: primary,
+      onPrimary: primary.contrastColor(),
+      primaryContainer: primary.adjustLightness(containerDelta),
+      onPrimaryContainer: primary.adjustLightness(onContainerDelta),
+
+      // Secondary colors
+      secondary: secondary,
+      onSecondary: secondary.contrastColor(),
+      secondaryContainer: secondary.adjustLightness(containerDelta),
+      onSecondaryContainer: secondary.adjustLightness(onContainerDelta),
+
+      // Tertiary colors (hue-shifted from primary)
+      tertiary: tertiary,
+      onTertiary: tertiary.contrastColor(),
+      tertiaryContainer: tertiary.adjustLightness(containerDelta),
+      onTertiaryContainer: tertiary.adjustLightness(onContainerDelta),
+
+      // Error colors (standard Material red)
+      error: isDark ? const Color(0xFFFFB4AB) : const Color(0xFFBA1A1A),
+      onError: isDark ? const Color(0xFF690005) : const Color(0xFFFFFFFF),
+      errorContainer: isDark ? const Color(0xFF93000A) : const Color(0xFFFFDAD6),
+      onErrorContainer: isDark ? const Color(0xFFFFDAD6) : const Color(0xFF410002),
+
+      // Surface colors
+      surface: background,
+      onSurface: text,
+      surfaceContainerHighest: background.adjustLightness(isDark ? 0.12 : -0.08),
+      surfaceContainerHigh: background.adjustLightness(isDark ? 0.09 : -0.05),
+      surfaceContainer: background.adjustLightness(isDark ? 0.06 : -0.03),
+      surfaceContainerLow: background.adjustLightness(isDark ? 0.03 : -0.01),
+      surfaceContainerLowest: background.adjustLightness(isDark ? -0.02 : 0.02),
+
+      // Outline colors
+      outline: text.adjustSaturation(-0.3).adjustLightness(isDark ? -0.2 : 0.2),
+      outlineVariant: text.adjustSaturation(-0.5).adjustLightness(isDark ? -0.35 : 0.35),
+
+      // System colors
+      shadow: const Color(0xFF000000),
+      scrim: const Color(0xFF000000),
+
+      // Inverse colors
+      inverseSurface: isDark ? text.adjustLightness(0.1) : text.adjustLightness(-0.1),
+      onInverseSurface: isDark ? background.adjustLightness(-0.05) : background.adjustLightness(0.05),
+      inversePrimary: primary.adjustLightness(isDark ? -0.2 : 0.2),
+    );
+  }
+}
 
 /// All customizable colors in a theme
 class AppThemeColors {
@@ -391,6 +608,8 @@ class AppTheme {
   final String? basedOnPresetId;
   final Brightness brightness;
   final AppThemeColors colors;
+  final SimpleThemeColors? simpleColors; // v2: 4 base colors for simplified editing
+  final int version; // 1 = legacy (31 colors only), 2 = simplified (4 colors + generated)
   final DateTime? createdAt;
   final DateTime? modifiedAt;
 
@@ -402,6 +621,8 @@ class AppTheme {
     this.basedOnPresetId,
     required this.brightness,
     required this.colors,
+    this.simpleColors,
+    this.version = 2,
     this.createdAt,
     this.modifiedAt,
   });
@@ -414,6 +635,8 @@ class AppTheme {
     String? basedOnPresetId,
     Brightness? brightness,
     AppThemeColors? colors,
+    SimpleThemeColors? simpleColors,
+    int? version,
     DateTime? createdAt,
     DateTime? modifiedAt,
   }) {
@@ -425,6 +648,8 @@ class AppTheme {
       basedOnPresetId: basedOnPresetId ?? this.basedOnPresetId,
       brightness: brightness ?? this.brightness,
       colors: colors ?? this.colors,
+      simpleColors: simpleColors ?? this.simpleColors,
+      version: version ?? this.version,
       createdAt: createdAt ?? this.createdAt,
       modifiedAt: modifiedAt ?? this.modifiedAt,
     );
@@ -439,7 +664,51 @@ class AppTheme {
       basedOnPresetId: isCustom ? basedOnPresetId : id,
       brightness: brightness,
       colors: colors,
+      simpleColors: simpleColors,
+      version: version,
       createdAt: DateTime.now(),
+      modifiedAt: DateTime.now(),
+    );
+  }
+
+  /// Create a theme from simple colors (auto-generates full color scheme)
+  factory AppTheme.fromSimpleColors({
+    required String id,
+    required String name,
+    String? description,
+    bool isCustom = true,
+    String? basedOnPresetId,
+    required Brightness brightness,
+    required SimpleThemeColors simpleColors,
+  }) {
+    final generator = ThemeColorGenerator(
+      simpleColors: simpleColors,
+      isDark: brightness == Brightness.dark,
+    );
+    return AppTheme(
+      id: id,
+      name: name,
+      description: description,
+      isCustom: isCustom,
+      basedOnPresetId: basedOnPresetId,
+      brightness: brightness,
+      colors: generator.generate(),
+      simpleColors: simpleColors,
+      version: 2,
+      createdAt: DateTime.now(),
+      modifiedAt: DateTime.now(),
+    );
+  }
+
+  /// Regenerate colors from simpleColors (useful after user changes base colors)
+  AppTheme regenerateColors() {
+    if (simpleColors == null) return this;
+    final generator = ThemeColorGenerator(
+      simpleColors: simpleColors!,
+      isDark: brightness == Brightness.dark,
+    );
+    return copyWith(
+      colors: generator.generate(),
       modifiedAt: DateTime.now(),
     );
   }
@@ -462,6 +731,8 @@ class AppTheme {
         'basedOnPresetId': basedOnPresetId,
         'brightness': brightness.name,
         'colors': colors.toJson(),
+        'simpleColors': simpleColors?.toJson(),
+        'version': version,
         'createdAt': createdAt?.toIso8601String(),
         'modifiedAt': modifiedAt?.toIso8601String(),
       };
@@ -477,6 +748,10 @@ class AppTheme {
           orElse: () => Brightness.light,
         ),
         colors: AppThemeColors.fromJson(json['colors']),
+        simpleColors: json['simpleColors'] != null
+            ? SimpleThemeColors.fromJson(json['simpleColors'])
+            : null,
+        version: json['version'] ?? 1, // Default to v1 for legacy themes
         createdAt: json['createdAt'] != null
             ? DateTime.parse(json['createdAt'])
             : null,
@@ -493,132 +768,101 @@ class AppTheme {
 
 /// Built-in preset themes
 class PresetThemes {
-  static const String lightId = 'preset_light';
-  static const String darkId = 'preset_dark';
-  static const String blueId = 'preset_blue';
+  static const String writerLightId = 'preset_writer_light';
+  static const String writerDarkId = 'preset_writer_dark';
+  static const String codeLightId = 'preset_code_light';
+  static const String codeDarkId = 'preset_code_dark';
   static const String sepiaId = 'preset_sepia';
   static const String hotdogStandId = 'preset_hotdog_stand';
   static const String nordId = 'preset_nord';
   static const String solarizedId = 'preset_solarized';
 
-  // Material 3 Light Theme
-  static const AppTheme light = AppTheme(
-    id: lightId,
-    name: 'Light',
-    description: 'Clean Material 3 light theme',
-    brightness: Brightness.light,
-    colors: AppThemeColors(
-      primary: Color(0xFF6750A4),
-      onPrimary: Color(0xFFFFFFFF),
-      primaryContainer: Color(0xFFEADDFF),
-      onPrimaryContainer: Color(0xFF21005D),
-      secondary: Color(0xFF625B71),
-      onSecondary: Color(0xFFFFFFFF),
-      secondaryContainer: Color(0xFFE8DEF8),
-      onSecondaryContainer: Color(0xFF1D192B),
-      tertiary: Color(0xFF7D5260),
-      onTertiary: Color(0xFFFFFFFF),
-      tertiaryContainer: Color(0xFFFFD8E4),
-      onTertiaryContainer: Color(0xFF31111D),
-      error: Color(0xFFB3261E),
-      onError: Color(0xFFFFFFFF),
-      errorContainer: Color(0xFFF9DEDC),
-      onErrorContainer: Color(0xFF410E0B),
-      surface: Color(0xFFFEF7FF),
-      onSurface: Color(0xFF1D1B20),
-      surfaceContainerHighest: Color(0xFFE6E0E9),
-      surfaceContainerHigh: Color(0xFFECE6F0),
-      surfaceContainer: Color(0xFFF3EDF7),
-      surfaceContainerLow: Color(0xFFF7F2FA),
-      surfaceContainerLowest: Color(0xFFFFFFFF),
-      outline: Color(0xFF79747E),
-      outlineVariant: Color(0xFFCAC4D0),
-      shadow: Color(0xFF000000),
-      scrim: Color(0xFF000000),
-      inverseSurface: Color(0xFF322F35),
-      onInverseSurface: Color(0xFFF5EFF7),
-      inversePrimary: Color(0xFFD0BCFF),
-    ),
+  // Default theme ID
+  static const String defaultThemeId = writerDarkId;
+
+  // Simple color definitions for new themes
+  static const _writerLightSimple = SimpleThemeColors(
+    primary: Color(0xFF5D4E37), // warm brown, cork-board inspired
+    secondary: Color(0xFF7A6B5A), // muted taupe
+    background: Color(0xFFFAF8F5), // warm off-white paper
+    text: Color(0xFF2D2A26), // dark brown-gray
   );
 
-  // Material 3 Dark Theme
-  static const AppTheme dark = AppTheme(
-    id: darkId,
-    name: 'Dark',
-    description: 'Material 3 dark theme',
+  static const _writerDarkSimple = SimpleThemeColors(
+    primary: Color(0xFFD4B896), // light warm tan
+    secondary: Color(0xFFB8A898), // muted light taupe
+    background: Color(0xFF1E1C1A), // dark warm gray
+    text: Color(0xFFE8E4DF), // off-white
+  );
+
+  static const _codeLightSimple = SimpleThemeColors(
+    primary: Color(0xFF0066B8), // VSCode blue
+    secondary: Color(0xFF6A737D), // GitHub gray
+    background: Color(0xFFFFFFFF), // pure white
+    text: Color(0xFF24292E), // GitHub dark
+  );
+
+  static const _codeDarkSimple = SimpleThemeColors(
+    primary: Color(0xFF569CD6), // VSCode light blue
+    secondary: Color(0xFF9CDCFE), // VSCode cyan
+    background: Color(0xFF1E1E1E), // VSCode dark
+    text: Color(0xFFD4D4D4), // VSCode light gray
+  );
+
+  // Writer Light - Scrivener-inspired warm tones
+  static final AppTheme writerLight = AppTheme(
+    id: writerLightId,
+    name: 'Writer Light',
+    description: 'Warm, comfortable tones for distraction-free writing',
+    brightness: Brightness.light,
+    simpleColors: _writerLightSimple,
+    version: 2,
+    colors: ThemeColorGenerator(
+      simpleColors: _writerLightSimple,
+      isDark: false,
+    ).generate(),
+  );
+
+  // Writer Dark - Scrivener-inspired warm dark tones (DEFAULT)
+  static final AppTheme writerDark = AppTheme(
+    id: writerDarkId,
+    name: 'Writer Dark',
+    description: 'Warm dark theme for comfortable night writing',
     brightness: Brightness.dark,
-    colors: AppThemeColors(
-      primary: Color(0xFFD0BCFF),
-      onPrimary: Color(0xFF381E72),
-      primaryContainer: Color(0xFF4F378B),
-      onPrimaryContainer: Color(0xFFEADDFF),
-      secondary: Color(0xFFCCC2DC),
-      onSecondary: Color(0xFF332D41),
-      secondaryContainer: Color(0xFF4A4458),
-      onSecondaryContainer: Color(0xFFE8DEF8),
-      tertiary: Color(0xFFEFB8C8),
-      onTertiary: Color(0xFF492532),
-      tertiaryContainer: Color(0xFF633B48),
-      onTertiaryContainer: Color(0xFFFFD8E4),
-      error: Color(0xFFF2B8B5),
-      onError: Color(0xFF601410),
-      errorContainer: Color(0xFF8C1D18),
-      onErrorContainer: Color(0xFFF9DEDC),
-      surface: Color(0xFF141218),
-      onSurface: Color(0xFFE6E0E9),
-      surfaceContainerHighest: Color(0xFF36343B),
-      surfaceContainerHigh: Color(0xFF2B2930),
-      surfaceContainer: Color(0xFF211F26),
-      surfaceContainerLow: Color(0xFF1D1B20),
-      surfaceContainerLowest: Color(0xFF0F0D13),
-      outline: Color(0xFF938F99),
-      outlineVariant: Color(0xFF49454F),
-      shadow: Color(0xFF000000),
-      scrim: Color(0xFF000000),
-      inverseSurface: Color(0xFFE6E0E9),
-      onInverseSurface: Color(0xFF322F35),
-      inversePrimary: Color(0xFF6750A4),
-    ),
+    simpleColors: _writerDarkSimple,
+    version: 2,
+    colors: ThemeColorGenerator(
+      simpleColors: _writerDarkSimple,
+      isDark: true,
+    ).generate(),
   );
 
-  // Ocean Blue Theme
-  static const AppTheme blue = AppTheme(
-    id: blueId,
-    name: 'Ocean Blue',
-    description: 'Calming blue color scheme',
+  // Code Light - VSCode-inspired clean professional look
+  static final AppTheme codeLight = AppTheme(
+    id: codeLightId,
+    name: 'Code Light',
+    description: 'Clean, professional light theme inspired by VSCode',
     brightness: Brightness.light,
-    colors: AppThemeColors(
-      primary: Color(0xFF0061A4),
-      onPrimary: Color(0xFFFFFFFF),
-      primaryContainer: Color(0xFFD1E4FF),
-      onPrimaryContainer: Color(0xFF001D36),
-      secondary: Color(0xFF535F70),
-      onSecondary: Color(0xFFFFFFFF),
-      secondaryContainer: Color(0xFFD7E3F7),
-      onSecondaryContainer: Color(0xFF101C2B),
-      tertiary: Color(0xFF6B5778),
-      onTertiary: Color(0xFFFFFFFF),
-      tertiaryContainer: Color(0xFFF2DAFF),
-      onTertiaryContainer: Color(0xFF251431),
-      error: Color(0xFFBA1A1A),
-      onError: Color(0xFFFFFFFF),
-      errorContainer: Color(0xFFFFDAD6),
-      onErrorContainer: Color(0xFF410002),
-      surface: Color(0xFFFDFCFF),
-      onSurface: Color(0xFF1A1C1E),
-      surfaceContainerHighest: Color(0xFFDEE3EB),
-      surfaceContainerHigh: Color(0xFFE4E9F0),
-      surfaceContainer: Color(0xFFEAEEF6),
-      surfaceContainerLow: Color(0xFFF0F4FB),
-      surfaceContainerLowest: Color(0xFFFFFFFF),
-      outline: Color(0xFF73777F),
-      outlineVariant: Color(0xFFC3C7CF),
-      shadow: Color(0xFF000000),
-      scrim: Color(0xFF000000),
-      inverseSurface: Color(0xFF2F3033),
-      onInverseSurface: Color(0xFFF1F0F4),
-      inversePrimary: Color(0xFF9ECAFF),
-    ),
+    simpleColors: _codeLightSimple,
+    version: 2,
+    colors: ThemeColorGenerator(
+      simpleColors: _codeLightSimple,
+      isDark: false,
+    ).generate(),
+  );
+
+  // Code Dark - VSCode-inspired dark theme
+  static final AppTheme codeDark = AppTheme(
+    id: codeDarkId,
+    name: 'Code Dark',
+    description: 'Professional dark theme inspired by VSCode',
+    brightness: Brightness.dark,
+    simpleColors: _codeDarkSimple,
+    version: 2,
+    colors: ThemeColorGenerator(
+      simpleColors: _codeDarkSimple,
+      isDark: true,
+    ).generate(),
   );
 
   // Sepia/Brown Theme (reading-friendly warm tones)
@@ -781,9 +1025,9 @@ class PresetThemes {
     ),
   );
 
-  /// All preset themes
+  /// All preset themes (Writer Dark is the default)
   static List<AppTheme> get all =>
-      [light, dark, blue, sepia, hotdogStand, nord, solarized];
+      [writerDark, writerLight, codeDark, codeLight, sepia, hotdogStand, nord, solarized];
 
   /// Get a preset theme by ID
   static AppTheme? getById(String id) {
@@ -793,4 +1037,7 @@ class PresetThemes {
       return null;
     }
   }
+
+  /// Get the default theme
+  static AppTheme get defaultTheme => writerDark;
 }

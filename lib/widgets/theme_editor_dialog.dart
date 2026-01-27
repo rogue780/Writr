@@ -3,7 +3,7 @@ import '../models/app_theme.dart';
 import '../services/theme_service.dart';
 import 'color_picker_dialog.dart';
 
-/// A dialog for editing theme colors
+/// A dialog for editing theme colors with simplified 4-color interface
 class ThemeEditorDialog extends StatefulWidget {
   final AppTheme theme;
   final ThemeService themeService;
@@ -40,8 +40,10 @@ class ThemeEditorDialog extends StatefulWidget {
 
 class _ThemeEditorDialogState extends State<ThemeEditorDialog> {
   late AppTheme _editingTheme;
+  late SimpleThemeColors _simpleColors;
   late TextEditingController _nameController;
   bool _hasChanges = false;
+  bool _showAdvanced = false;
 
   @override
   void initState() {
@@ -49,6 +51,15 @@ class _ThemeEditorDialogState extends State<ThemeEditorDialog> {
     _editingTheme = widget.theme;
     _nameController = TextEditingController(text: widget.theme.name);
     _nameController.addListener(_onNameChanged);
+
+    // Initialize simple colors from theme or derive from existing colors
+    _simpleColors = widget.theme.simpleColors ??
+        SimpleThemeColors(
+          primary: widget.theme.colors.primary,
+          secondary: widget.theme.colors.secondary,
+          background: widget.theme.colors.surface,
+          text: widget.theme.colors.onSurface,
+        );
 
     // Start preview
     widget.themeService.previewTheme(_editingTheme);
@@ -69,7 +80,41 @@ class _ThemeEditorDialogState extends State<ThemeEditorDialog> {
     }
   }
 
-  void _updateColor(String property, Color newColor) {
+  void _updateSimpleColor(String colorName, Color newColor) {
+    setState(() {
+      switch (colorName) {
+        case 'primary':
+          _simpleColors = _simpleColors.copyWith(primary: newColor);
+          break;
+        case 'secondary':
+          _simpleColors = _simpleColors.copyWith(secondary: newColor);
+          break;
+        case 'background':
+          _simpleColors = _simpleColors.copyWith(background: newColor);
+          break;
+        case 'text':
+          _simpleColors = _simpleColors.copyWith(text: newColor);
+          break;
+      }
+      _regenerateColors();
+      _hasChanges = true;
+    });
+    widget.themeService.previewTheme(_editingTheme);
+  }
+
+  void _regenerateColors() {
+    final generator = ThemeColorGenerator(
+      simpleColors: _simpleColors,
+      isDark: _editingTheme.brightness == Brightness.dark,
+    );
+    _editingTheme = _editingTheme.copyWith(
+      colors: generator.generate(),
+      simpleColors: _simpleColors,
+      version: 2,
+    );
+  }
+
+  void _updateAdvancedColor(String property, Color newColor) {
     setState(() {
       _editingTheme = _editingTheme.copyWith(
         colors: _editingTheme.colors.copyWithProperty(property, newColor),
@@ -82,6 +127,7 @@ class _ThemeEditorDialogState extends State<ThemeEditorDialog> {
   void _updateBrightness(Brightness brightness) {
     setState(() {
       _editingTheme = _editingTheme.copyWith(brightness: brightness);
+      _regenerateColors();
       _hasChanges = true;
     });
     widget.themeService.previewTheme(_editingTheme);
@@ -119,7 +165,16 @@ class _ThemeEditorDialogState extends State<ThemeEditorDialog> {
         _editingTheme = _editingTheme.copyWith(
           brightness: preset.brightness,
           colors: preset.colors,
+          simpleColors: preset.simpleColors,
+          version: preset.version,
         );
+        _simpleColors = preset.simpleColors ??
+            SimpleThemeColors(
+              primary: preset.colors.primary,
+              secondary: preset.colors.secondary,
+              background: preset.colors.surface,
+              text: preset.colors.onSurface,
+            );
         _hasChanges = true;
       });
       widget.themeService.previewTheme(_editingTheme);
@@ -136,6 +191,7 @@ class _ThemeEditorDialogState extends State<ThemeEditorDialog> {
 
     final finalTheme = _editingTheme.copyWith(
       name: _nameController.text.trim(),
+      simpleColors: _simpleColors,
     );
 
     if (widget.isNew) {
@@ -223,51 +279,13 @@ class _ThemeEditorDialogState extends State<ThemeEditorDialog> {
                       const SizedBox(height: 16),
                       _buildBrightnessToggle(),
                       const SizedBox(height: 24),
-                      _buildColorSection('Primary Colors', [
-                        _ColorItem('Primary', 'primary', _editingTheme.colors.primary),
-                        _ColorItem('On Primary', 'onPrimary', _editingTheme.colors.onPrimary),
-                        _ColorItem('Primary Container', 'primaryContainer', _editingTheme.colors.primaryContainer),
-                        _ColorItem('On Primary Container', 'onPrimaryContainer', _editingTheme.colors.onPrimaryContainer),
-                      ]),
+                      _buildSimpleColorSection(),
                       const SizedBox(height: 16),
-                      _buildColorSection('Secondary Colors', [
-                        _ColorItem('Secondary', 'secondary', _editingTheme.colors.secondary),
-                        _ColorItem('On Secondary', 'onSecondary', _editingTheme.colors.onSecondary),
-                        _ColorItem('Secondary Container', 'secondaryContainer', _editingTheme.colors.secondaryContainer),
-                        _ColorItem('On Secondary Container', 'onSecondaryContainer', _editingTheme.colors.onSecondaryContainer),
-                      ]),
-                      const SizedBox(height: 16),
-                      _buildColorSection('Tertiary Colors', [
-                        _ColorItem('Tertiary', 'tertiary', _editingTheme.colors.tertiary),
-                        _ColorItem('On Tertiary', 'onTertiary', _editingTheme.colors.onTertiary),
-                      ]),
-                      const SizedBox(height: 16),
-                      _buildColorSection('Surface Colors', [
-                        _ColorItem('Surface', 'surface', _editingTheme.colors.surface),
-                        _ColorItem('On Surface', 'onSurface', _editingTheme.colors.onSurface),
-                        _ColorItem('Surface Container', 'surfaceContainer', _editingTheme.colors.surfaceContainer),
-                        _ColorItem('Surface Container Highest', 'surfaceContainerHighest', _editingTheme.colors.surfaceContainerHighest),
-                        _ColorItem('Surface Container High', 'surfaceContainerHigh', _editingTheme.colors.surfaceContainerHigh),
-                        _ColorItem('Surface Container Low', 'surfaceContainerLow', _editingTheme.colors.surfaceContainerLow),
-                        _ColorItem('Surface Container Lowest', 'surfaceContainerLowest', _editingTheme.colors.surfaceContainerLowest),
-                        _ColorItem('Inverse Surface', 'inverseSurface', _editingTheme.colors.inverseSurface),
-                        _ColorItem('On Inverse Surface', 'onInverseSurface', _editingTheme.colors.onInverseSurface),
-                      ]),
-                      const SizedBox(height: 16),
-                      _buildColorSection('Error Colors', [
-                        _ColorItem('Error', 'error', _editingTheme.colors.error),
-                        _ColorItem('On Error', 'onError', _editingTheme.colors.onError),
-                        _ColorItem('Error Container', 'errorContainer', _editingTheme.colors.errorContainer),
-                        _ColorItem('On Error Container', 'onErrorContainer', _editingTheme.colors.onErrorContainer),
-                      ]),
-                      const SizedBox(height: 16),
-                      _buildColorSection('Other Colors', [
-                        _ColorItem('Outline', 'outline', _editingTheme.colors.outline),
-                        _ColorItem('Outline Variant', 'outlineVariant', _editingTheme.colors.outlineVariant),
-                        _ColorItem('Shadow', 'shadow', _editingTheme.colors.shadow),
-                        _ColorItem('Scrim', 'scrim', _editingTheme.colors.scrim),
-                        _ColorItem('Inverse Primary', 'inversePrimary', _editingTheme.colors.inversePrimary),
-                      ]),
+                      _buildAdvancedToggle(),
+                      if (_showAdvanced) ...[
+                        const SizedBox(height: 16),
+                        _buildAdvancedSection(),
+                      ],
                     ],
                   ),
                 ),
@@ -314,55 +332,88 @@ class _ThemeEditorDialogState extends State<ThemeEditorDialog> {
 
   Widget _buildPreview() {
     return Container(
-      height: 80,
+      height: 100,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(11),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Color swatches row
             Expanded(
-              child: Container(
-                color: _editingTheme.colors.primary,
-                child: Center(
-                  child: Text(
-                    'Primary',
-                    style: TextStyle(
-                      color: _editingTheme.colors.onPrimary,
-                      fontWeight: FontWeight.bold,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Container(
+                      color: _simpleColors.primary,
+                      child: Center(
+                        child: Text(
+                          'Primary',
+                          style: TextStyle(
+                            color: _simpleColors.primary.contrastColor(),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  Expanded(
+                    child: Container(
+                      color: _simpleColors.secondary,
+                      child: Center(
+                        child: Text(
+                          'Secondary',
+                          style: TextStyle(
+                            color: _simpleColors.secondary.contrastColor(),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
+            // Text on background preview
             Expanded(
               child: Container(
-                color: _editingTheme.colors.secondary,
-                child: Center(
-                  child: Text(
-                    'Secondary',
-                    style: TextStyle(
-                      color: _editingTheme.colors.onSecondary,
-                      fontWeight: FontWeight.bold,
+                color: _simpleColors.background,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Sample text on background',
+                        style: TextStyle(
+                          color: _simpleColors.text,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: Container(
-                color: _editingTheme.colors.surface,
-                child: Center(
-                  child: Text(
-                    'Surface',
-                    style: TextStyle(
-                      color: _editingTheme.colors.onSurface,
-                      fontWeight: FontWeight.bold,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _simpleColors.primary,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Button',
+                        style: TextStyle(
+                          color: _simpleColors.primary.contrastColor(),
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -408,31 +459,234 @@ class _ThemeEditorDialogState extends State<ThemeEditorDialog> {
     );
   }
 
-  Widget _buildColorSection(String title, List<_ColorItem> colors) {
+  Widget _buildSimpleColorSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Theme Colors',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Pick 4 base colors. All variations are auto-generated.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(height: 12),
+        _buildSimpleColorRow('Primary', 'primary', _simpleColors.primary,
+            'Main accent color for buttons and highlights'),
+        _buildSimpleColorRow('Secondary', 'secondary', _simpleColors.secondary,
+            'Complementary accent for badges and secondary actions'),
+        _buildSimpleColorRow('Background', 'background', _simpleColors.background,
+            'Main surface color'),
+        _buildSimpleColorRow('Text', 'text', _simpleColors.text,
+            'Primary text color'),
+      ],
+    );
+  }
+
+  Widget _buildSimpleColorRow(
+      String label, String colorName, Color color, String description) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
+                Text(
+                  description,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () async {
+              final newColor = await ColorPickerDialog.show(
+                context,
+                initialColor: color,
+                title: label,
+              );
+              if (newColor != null) {
+                _updateSimpleColor(colorName, newColor);
+              }
+            },
+            child: Container(
+              width: 48,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(context).dividerColor,
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 70,
+            child: Text(
+              '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontFamily: 'monospace',
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdvancedToggle() {
+    return InkWell(
+      onTap: () => setState(() => _showAdvanced = !_showAdvanced),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Icon(
+              _showAdvanced ? Icons.expand_less : Icons.expand_more,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _showAdvanced ? 'Hide Advanced Colors' : 'Show Advanced Colors',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+            ),
+            const Spacer(),
+            Text(
+              '31 colors',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAdvancedSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Advanced color editing may break the auto-generated harmony.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+          ),
+          const SizedBox(height: 16),
+          _buildAdvancedColorSection('Primary Colors', [
+            _ColorItem('Primary', 'primary', _editingTheme.colors.primary),
+            _ColorItem('On Primary', 'onPrimary', _editingTheme.colors.onPrimary),
+            _ColorItem('Primary Container', 'primaryContainer', _editingTheme.colors.primaryContainer),
+            _ColorItem('On Primary Container', 'onPrimaryContainer', _editingTheme.colors.onPrimaryContainer),
+          ]),
+          const SizedBox(height: 12),
+          _buildAdvancedColorSection('Secondary Colors', [
+            _ColorItem('Secondary', 'secondary', _editingTheme.colors.secondary),
+            _ColorItem('On Secondary', 'onSecondary', _editingTheme.colors.onSecondary),
+            _ColorItem('Secondary Container', 'secondaryContainer', _editingTheme.colors.secondaryContainer),
+            _ColorItem('On Secondary Container', 'onSecondaryContainer', _editingTheme.colors.onSecondaryContainer),
+          ]),
+          const SizedBox(height: 12),
+          _buildAdvancedColorSection('Tertiary Colors', [
+            _ColorItem('Tertiary', 'tertiary', _editingTheme.colors.tertiary),
+            _ColorItem('On Tertiary', 'onTertiary', _editingTheme.colors.onTertiary),
+            _ColorItem('Tertiary Container', 'tertiaryContainer', _editingTheme.colors.tertiaryContainer),
+            _ColorItem('On Tertiary Container', 'onTertiaryContainer', _editingTheme.colors.onTertiaryContainer),
+          ]),
+          const SizedBox(height: 12),
+          _buildAdvancedColorSection('Surface Colors', [
+            _ColorItem('Surface', 'surface', _editingTheme.colors.surface),
+            _ColorItem('On Surface', 'onSurface', _editingTheme.colors.onSurface),
+            _ColorItem('Surface Container', 'surfaceContainer', _editingTheme.colors.surfaceContainer),
+            _ColorItem('Surface Container Highest', 'surfaceContainerHighest', _editingTheme.colors.surfaceContainerHighest),
+            _ColorItem('Surface Container High', 'surfaceContainerHigh', _editingTheme.colors.surfaceContainerHigh),
+            _ColorItem('Surface Container Low', 'surfaceContainerLow', _editingTheme.colors.surfaceContainerLow),
+            _ColorItem('Surface Container Lowest', 'surfaceContainerLowest', _editingTheme.colors.surfaceContainerLowest),
+            _ColorItem('Inverse Surface', 'inverseSurface', _editingTheme.colors.inverseSurface),
+            _ColorItem('On Inverse Surface', 'onInverseSurface', _editingTheme.colors.onInverseSurface),
+          ]),
+          const SizedBox(height: 12),
+          _buildAdvancedColorSection('Error Colors', [
+            _ColorItem('Error', 'error', _editingTheme.colors.error),
+            _ColorItem('On Error', 'onError', _editingTheme.colors.onError),
+            _ColorItem('Error Container', 'errorContainer', _editingTheme.colors.errorContainer),
+            _ColorItem('On Error Container', 'onErrorContainer', _editingTheme.colors.onErrorContainer),
+          ]),
+          const SizedBox(height: 12),
+          _buildAdvancedColorSection('Other Colors', [
+            _ColorItem('Outline', 'outline', _editingTheme.colors.outline),
+            _ColorItem('Outline Variant', 'outlineVariant', _editingTheme.colors.outlineVariant),
+            _ColorItem('Shadow', 'shadow', _editingTheme.colors.shadow),
+            _ColorItem('Scrim', 'scrim', _editingTheme.colors.scrim),
+            _ColorItem('Inverse Primary', 'inversePrimary', _editingTheme.colors.inversePrimary),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdvancedColorSection(String title, List<_ColorItem> colors) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
         ),
-        const SizedBox(height: 8),
-        ...colors.map((item) => _buildColorRow(item)),
+        const SizedBox(height: 4),
+        ...colors.map((item) => _buildAdvancedColorRow(item)),
       ],
     );
   }
 
-  Widget _buildColorRow(_ColorItem item) {
+  Widget _buildAdvancedColorRow(_ColorItem item) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
           Expanded(
             child: Text(
               item.label,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
           GestureDetector(
@@ -443,28 +697,29 @@ class _ThemeEditorDialogState extends State<ThemeEditorDialog> {
                 title: item.label,
               );
               if (newColor != null) {
-                _updateColor(item.property, newColor);
+                _updateAdvancedColor(item.property, newColor);
               }
             },
             child: Container(
-              width: 40,
-              height: 28,
+              width: 32,
+              height: 20,
               decoration: BoxDecoration(
                 color: item.color,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(
                   color: Theme.of(context).dividerColor,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           SizedBox(
-            width: 70,
+            width: 60,
             child: Text(
               '#${item.color.toARGB32().toRadixString(16).substring(2).toUpperCase()}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontFamily: 'monospace',
+                    fontSize: 10,
                   ),
             ),
           ),

@@ -9,6 +9,7 @@ import '../models/document_metadata.dart';
 import '../models/snapshot.dart';
 import '../models/research_item.dart';
 import '../utils/markdown_frontmatter.dart';
+import 'vcs_service.dart';
 
 /// Generate a unique ID for new items.
 String _generateUniqueId() {
@@ -23,6 +24,7 @@ String _generateUniqueId() {
 /// - research/{uuid}.{ext} - Research files (PDFs, images, etc.)
 /// - research/index.json - Research metadata
 /// - snapshots/{doc-uuid}/{timestamp}.md - Version snapshots
+/// - .writrc/ - Version control data (commits, branches, etc.)
 class WritrService extends ChangeNotifier {
   ScrivenerProject? _currentProject;
   bool _isLoading = false;
@@ -32,10 +34,14 @@ class WritrService extends ChangeNotifier {
   // Track which documents have been modified
   final Set<String> _dirtyDocIds = {};
 
+  // Version control service
+  VcsService? _vcsService;
+
   ScrivenerProject? get currentProject => _currentProject;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get hasUnsavedChanges => _hasUnsavedChanges;
+  VcsService? get vcsService => _vcsService;
 
   /// Load a Writr project from a .writ directory.
   Future<void> loadProject(String projectPath) async {
@@ -90,6 +96,9 @@ class WritrService extends ChangeNotifier {
         settings: ProjectSettings.defaults(),
       );
 
+      // Initialize version control
+      await _initializeVcs(projectPath);
+
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -97,6 +106,12 @@ class WritrService extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Initialize version control for the project.
+  Future<void> _initializeVcs(String projectPath) async {
+    _vcsService = VcsService();
+    await _vcsService!.initialize(projectPath);
   }
 
   /// Set a project directly (for syncing from ScrivenerService).
@@ -375,6 +390,9 @@ class WritrService extends ChangeNotifier {
       // Save snapshots
       await _saveSnapshots(projectDir);
 
+      // Auto-commit to version control
+      await _autoCommit();
+
       _dirtyDocIds.clear();
       _hasUnsavedChanges = false;
       _isLoading = false;
@@ -383,6 +401,21 @@ class WritrService extends ChangeNotifier {
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Auto-commit changes to version control.
+  Future<void> _autoCommit() async {
+    if (_vcsService == null || _currentProject == null) return;
+
+    try {
+      final commit = await _vcsService!.commit(project: _currentProject!);
+      if (commit != null) {
+        debugPrint('VCS: Auto-committed ${commit.hash.substring(0, 8)}: ${commit.message}');
+      }
+    } catch (e) {
+      // Don't fail the save if VCS commit fails
+      debugPrint('VCS: Auto-commit failed: $e');
     }
   }
 
@@ -601,7 +634,10 @@ class WritrService extends ChangeNotifier {
       // Create empty project with default structure
       _currentProject = ScrivenerProject.empty(name, projectPath);
 
-      // Save initial project structure
+      // Initialize version control
+      await _initializeVcs(projectPath);
+
+      // Save initial project structure (this will also create the first commit)
       await saveProject();
 
       _isLoading = false;

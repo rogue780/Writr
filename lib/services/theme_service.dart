@@ -9,9 +9,14 @@ class ThemeService extends ChangeNotifier {
   static const String _customThemesKey = 'custom_themes';
   static const String _legacyThemeModeKey = 'theme_mode';
 
+  // Old theme IDs for migration
+  static const String _legacyLightId = 'preset_light';
+  static const String _legacyDarkId = 'preset_dark';
+  static const String _legacyBlueId = 'preset_blue';
+
   SharedPreferences? _prefs;
 
-  String _activeThemeId = PresetThemes.lightId;
+  String _activeThemeId = PresetThemes.defaultThemeId;
   List<AppTheme> _customThemes = [];
   AppTheme? _previewTheme;
 
@@ -26,7 +31,7 @@ class ThemeService extends ChangeNotifier {
   /// Currently active theme (or preview if active)
   AppTheme get activeTheme {
     if (_previewTheme != null) return _previewTheme!;
-    return getThemeById(_activeThemeId) ?? PresetThemes.light;
+    return getThemeById(_activeThemeId) ?? PresetThemes.defaultTheme;
   }
 
   /// ThemeData for MaterialApp
@@ -49,20 +54,42 @@ class ThemeService extends ChangeNotifier {
     if (oldThemeMode != null) {
       switch (oldThemeMode) {
         case 'dark':
-          _activeThemeId = PresetThemes.darkId;
+          _activeThemeId = PresetThemes.writerDarkId;
           break;
         case 'light':
         case 'system':
         default:
-          _activeThemeId = PresetThemes.lightId;
+          _activeThemeId = PresetThemes.writerLightId;
       }
       _prefs?.setString(_activeThemeIdKey, _activeThemeId);
     }
   }
 
+  /// Migrate old theme IDs to new ones (light->writerLight, dark->writerDark, blue->codeLight)
+  String _migrateThemeId(String themeId) {
+    switch (themeId) {
+      case _legacyLightId:
+        return PresetThemes.writerLightId;
+      case _legacyDarkId:
+        return PresetThemes.writerDarkId;
+      case _legacyBlueId:
+        return PresetThemes.codeLightId;
+      default:
+        return themeId;
+    }
+  }
+
   void _loadActiveThemeId() {
-    _activeThemeId =
-        _prefs?.getString(_activeThemeIdKey) ?? PresetThemes.lightId;
+    var themeId = _prefs?.getString(_activeThemeIdKey) ?? PresetThemes.defaultThemeId;
+
+    // Migrate old theme IDs
+    final migratedId = _migrateThemeId(themeId);
+    if (migratedId != themeId) {
+      themeId = migratedId;
+      _prefs?.setString(_activeThemeIdKey, themeId);
+    }
+
+    _activeThemeId = themeId;
     notifyListeners();
   }
 
@@ -137,16 +164,41 @@ class ThemeService extends ChangeNotifier {
     required String name,
     AppTheme? basedOn,
   }) async {
+    final baseTheme = basedOn ?? PresetThemes.defaultTheme;
     final theme = AppTheme(
       id: _generateId(),
       name: name,
       isCustom: true,
       basedOnPresetId:
           basedOn?.isCustom == false ? basedOn?.id : basedOn?.basedOnPresetId,
-      brightness: basedOn?.brightness ?? Brightness.light,
-      colors: basedOn?.colors ?? PresetThemes.light.colors,
+      brightness: baseTheme.brightness,
+      colors: baseTheme.colors,
+      simpleColors: baseTheme.simpleColors,
+      version: baseTheme.version,
       createdAt: DateTime.now(),
       modifiedAt: DateTime.now(),
+    );
+
+    _customThemes.add(theme);
+    await _saveCustomThemes();
+    notifyListeners();
+    return theme;
+  }
+
+  /// Create a new custom theme from simple colors (4 base colors)
+  Future<AppTheme> createCustomThemeFromSimple({
+    required String name,
+    required SimpleThemeColors simpleColors,
+    required Brightness brightness,
+    String? basedOnPresetId,
+  }) async {
+    final theme = AppTheme.fromSimpleColors(
+      id: _generateId(),
+      name: name,
+      isCustom: true,
+      basedOnPresetId: basedOnPresetId,
+      brightness: brightness,
+      simpleColors: simpleColors,
     );
 
     _customThemes.add(theme);
@@ -180,9 +232,9 @@ class ThemeService extends ChangeNotifier {
   Future<void> deleteCustomTheme(String themeId) async {
     _customThemes.removeWhere((t) => t.id == themeId);
 
-    // If deleted theme was active, switch to light
+    // If deleted theme was active, switch to default
     if (_activeThemeId == themeId) {
-      await setActiveTheme(PresetThemes.lightId);
+      await setActiveTheme(PresetThemes.defaultThemeId);
     } else {
       await _saveCustomThemes();
       notifyListeners();
@@ -207,6 +259,8 @@ class ThemeService extends ChangeNotifier {
       basedOnPresetId: preset.id,
       brightness: preset.brightness,
       colors: preset.colors,
+      simpleColors: preset.simpleColors,
+      version: preset.version,
       createdAt: theme.createdAt,
       modifiedAt: DateTime.now(),
     );
