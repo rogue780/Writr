@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/view_mode.dart';
 import '../services/scrivener_service.dart';
+import '../services/vcs_service.dart';
+import 'vcs/branch_picker.dart';
 
 /// Traditional menu bar with File/Edit/View/Project/Tools menus
 class AppMenuBar extends StatelessWidget {
@@ -56,6 +58,11 @@ class AppMenuBar extends StatelessWidget {
   final VoidCallback? onCustomFields;
   final VoidCallback? onSettings;
 
+  // VCS (Version Control)
+  final VcsService? vcsService;
+  final VoidCallback? onHistoryPressed;
+  final bool showHistory;
+  final VoidCallback? onToggleHistory;
 
   const AppMenuBar({
     super.key,
@@ -104,6 +111,11 @@ class AppMenuBar extends StatelessWidget {
     this.onKeywordManager,
     this.onCustomFields,
     this.onSettings,
+    // VCS
+    this.vcsService,
+    this.onHistoryPressed,
+    this.showHistory = false,
+    this.onToggleHistory,
   });
 
   @override
@@ -162,6 +174,14 @@ class AppMenuBar extends StatelessWidget {
               ),
             ],
             const SizedBox(width: 12),
+          ],
+          // VCS Branch Picker
+          if (vcsService != null) ...[
+            VcsBranchPicker(
+              vcsService: vcsService!,
+              onHistoryPressed: onHistoryPressed,
+            ),
+            const SizedBox(width: 8),
           ],
           const Spacer(),
           // Mode indicator
@@ -466,6 +486,15 @@ class AppMenuBar extends StatelessWidget {
           checked: splitEditorEnabled,
           onTap: onToggleSplitEditor,
         ),
+        if (vcsService != null) ...[
+          const _MenuDivider(),
+          _MenuCheckItem(
+            label: 'Version History',
+            checked: showHistory,
+            shortcut: 'Ctrl+H',
+            onTap: onToggleHistory,
+          ),
+        ],
       ],
     );
   }

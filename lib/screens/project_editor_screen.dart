@@ -48,6 +48,9 @@ import '../widgets/custom_metadata_editor.dart';
 import '../widgets/linguistic_overlay.dart';
 import '../widgets/settings_modal.dart';
 import '../services/project_converter.dart';
+import '../widgets/vcs/history_panel.dart';
+import '../widgets/diff_viewer.dart';
+import '../models/vcs/commit.dart';
 
 class ProjectEditorScreen extends StatefulWidget {
   const ProjectEditorScreen({super.key});
@@ -67,6 +70,7 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
   bool _showInspector = true;
   bool _showSearch = false;
   bool _showCollections = false;
+  bool _showHistory = false;
   ViewMode _viewMode = ViewMode.editor;
   SplitEditorState _splitEditorState = const SplitEditorState();
 
@@ -260,6 +264,11 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                             onKeywordManager: _openKeywordManager,
                             onCustomFields: _openCustomFieldManager,
                             onSettings: () => SettingsModal.show(context),
+                            // VCS
+                            vcsService: context.watch<WritrService>().vcsService,
+                            onHistoryPressed: () => setState(() => _showHistory = true),
+                            showHistory: _showHistory,
+                            onToggleHistory: () => setState(() => _showHistory = !_showHistory),
                           ),
                   ),
                 ),
@@ -642,6 +651,14 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
                     }
                     setState(() => _showInspector = true);
                   },
+                ),
+              // VCS History Panel
+              if (_showHistory && context.read<WritrService>().vcsService != null)
+                VcsHistoryPanel(
+                  vcsService: context.read<WritrService>().vcsService!,
+                  onClose: () => setState(() => _showHistory = false),
+                  onViewCommit: _showCommitDiff,
+                  onRestoreCommit: _restoreFromCommit,
                 ),
             ],
           ),
@@ -1671,6 +1688,130 @@ class _ProjectEditorScreenState extends State<ProjectEditorScreen> {
     );
   }
 
+  /// Show diff viewer for a commit
+  Future<void> _showCommitDiff(VcsCommit commit) async {
+    final vcsService = context.read<WritrService>().vcsService;
+    if (vcsService == null) return;
+
+    // If no parent, this is the first commit - show all content as additions
+    if (commit.parentHash == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This is the initial commit')),
+        );
+      }
+      return;
+    }
+
+    final diff = await vcsService.getDiff(commit.parentHash!, commit.hash);
+    if (diff == null || !mounted) return;
+
+    // Show dialog with document changes
+    showDialog(
+      context: context,
+      builder: (dialogContext) => _CommitDiffDialog(
+        commit: commit,
+        diff: diff,
+      ),
+    );
+  }
+
+  /// Restore project from a commit
+  Future<void> _restoreFromCommit(VcsCommit commit) async {
+    final vcsService = context.read<WritrService>().vcsService;
+    final service = context.read<ScrivenerService>();
+    if (vcsService == null || service.currentProject == null) return;
+
+    // Confirm restore
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.restore, size: 48),
+        title: const Text('Restore from Commit'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Restore to: ${commit.message}'),
+            const SizedBox(height: 8),
+            Text(
+              'Date: ${_formatCommitDate(commit.timestamp)}',
+              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'This will replace your current content with the content from this commit. '
+              'Your current work will be saved as a new commit first.',
+              style: TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // First, commit current state
+      await vcsService.commit(
+        project: service.currentProject!,
+        message: 'Auto-save before restore',
+      );
+
+      // Restore content from commit
+      final restored = await vcsService.restoreFromCommit(commit.hash);
+      if (restored == null) {
+        throw Exception('Failed to restore commit data');
+      }
+
+      // Update project with restored content
+      for (final entry in restored.contents.entries) {
+        service.updateTextContent(entry.key, entry.value);
+      }
+
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Restored to: ${commit.message}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Restore failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  String _formatCommitDate(DateTime date) {
+    return '${date.month}/${date.day}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
   Future<void> _exportProject() async {
     final service = context.read<ScrivenerService>();
     final webStorage = context.read<WebStorageService>();
@@ -2449,6 +2590,177 @@ class _ResizeHandleState extends State<_ResizeHandle> {
         ),
       ),
     );
+  }
+}
+
+/// Dialog showing changes in a commit
+class _CommitDiffDialog extends StatelessWidget {
+  final VcsCommit commit;
+  final VcsCommitDiff diff;
+
+  const _CommitDiffDialog({
+    required this.commit,
+    required this.diff,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Dialog(
+      child: Container(
+        width: 600,
+        height: 500,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                const Icon(Icons.difference, size: 24),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        commit.message,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        '${commit.author} • ${_formatDate(commit.timestamp)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // Stats
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '+${diff.totalAdditions}',
+                    style: const TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '-${diff.totalDeletions}',
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    '${diff.documentChanges.length} file(s) changed',
+                    style: TextStyle(color: colorScheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+
+            // Changed files list
+            Expanded(
+              child: diff.documentChanges.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No document changes',
+                        style: TextStyle(color: colorScheme.onSurfaceVariant),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: diff.documentChanges.length,
+                      itemBuilder: (context, index) {
+                        final change = diff.documentChanges[index];
+                        return _buildChangeItem(context, change);
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChangeItem(BuildContext context, VcsDocumentChange change) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    IconData icon;
+    Color iconColor;
+    switch (change.type) {
+      case VcsChangeType.added:
+        icon = Icons.add_circle;
+        iconColor = Colors.green;
+      case VcsChangeType.modified:
+        icon = Icons.edit;
+        iconColor = Colors.orange;
+      case VcsChangeType.deleted:
+        icon = Icons.remove_circle;
+        iconColor = Colors.red;
+      case VcsChangeType.renamed:
+        icon = Icons.drive_file_rename_outline;
+        iconColor = Colors.blue;
+    }
+
+    return ListTile(
+      leading: Icon(icon, color: iconColor),
+      title: Text(change.documentTitle),
+      subtitle: Text(
+        '+${change.additions} -${change.deletions}',
+        style: TextStyle(
+          fontSize: 12,
+          color: colorScheme.onSurfaceVariant,
+        ),
+      ),
+      trailing: change.type == VcsChangeType.modified
+          ? TextButton(
+              onPressed: () {
+                // Show side-by-side diff
+                DiffViewer.show(
+                  context: context,
+                  title: change.documentTitle,
+                  oldText: change.oldContent ?? '',
+                  newText: change.newContent ?? '',
+                  oldLabel: 'Before',
+                  newLabel: 'After',
+                );
+              },
+              child: const Text('View Diff'),
+            )
+          : null,
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.month}/${date.day}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 }
 
